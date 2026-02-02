@@ -103,8 +103,8 @@ swimlane_chart.py
 | | `lane_gap` | 0 | レーン間の間隔 |
 | カラム | `col_width` | 420 | 各時系列カラムの幅 |
 | | `col_gap` | 0 | カラム間の間隔 |
-| 罫線 | `divider_thickness` | 3 | レーン/カラム区切り線の太さ |
-| | `gridline_thickness` | 3 | グリッド線の太さ |
+| 罫線 | `divider_thickness` | 8 | レーン/カラム区切り線の太さ |
+| | `gridline_thickness` | 8 | グリッド線の太さ |
 | ノード | `task_w` x `task_h` | 160 x 80 | タスクノードのデフォルトサイズ |
 | | `decision_w` x `decision_h` | 110 x 110 | 判断ノードのデフォルトサイズ |
 | | `chip_w` x `chip_h` | 130 x 28 | チップ（システム名タグ）のデフォルトサイズ |
@@ -223,8 +223,8 @@ r"^\[(?P<key>[A-Z0-9_]+)\]\s"
 | 要素 | 実装 | 備考 |
 |---|---|---|
 | 外枠フレーム | 全体サイズの rectangle | fill: #FFFFFF, stroke: #CFCFCF |
-| レーン区切り線 | 水平方向の薄い rectangle | fill: #E5E5E5, thickness: 3px |
-| カラム区切り線 | 垂直方向の薄い rectangle | fill: #E5E5E5, thickness: 3px |
+| レーン区切り線 | 水平方向の薄い rectangle | fill: #E5E5E5, thickness: 8px |
+| カラム区切り線 | 垂直方向の薄い rectangle | fill: #E5E5E5, thickness: 8px |
 | ヘッダー区切り線 | 水平方向の薄い rectangle | ヘッダー行とレーン領域の境界 |
 
 Miro API には「線（line）」の直接作成がないため、細い矩形で代用する。
@@ -272,7 +272,7 @@ Miro API には「線（line）」の直接作成がないため、細い矩形�
 
 4. **Z-order（重なり順）**: Miro では作成順が重なり順に影響する。背景（フレーム・罫線）→ テキスト → ノードの順で作成すること。
 
-5. **Frame 内座標**: Frame 内のアイテムは `relativeTo: parent_top_left` の相対座標系で配置される。Bulk 作成時に各アイテムの `parent` プロパティに Frame ID を注入する。
+5. **Frame 内座標**: Frame 内のアイテムは、Bulk 作成時に `parent` プロパティに Frame ID を注入することで Frame に所属させる。座標系は Miro API のデフォルト動作（Frame の top-left 基点の相対座標）に依存しており、`relativeTo` を明示設定していない。`generate_chart.py` では `origin_x = chart_w // 2`, `origin_y = chart_h // 2 + ORIGIN_Y_TITLE_OFFSET` でフレーム中心を基準に座標計算している。
 
 6. **削除済みアイテムの扱い**: DELETE エンドポイントで 404 が返った場合は「既に削除済み」として正常扱いし、リトライしない。
 

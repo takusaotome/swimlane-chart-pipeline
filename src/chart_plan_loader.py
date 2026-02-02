@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from typing import Any, Dict, List, NamedTuple, Optional
 
 from src.swimlane_lib import Edge, Layout, Node
@@ -174,33 +176,50 @@ def apply_patch(chart_plan_path: str, patches: List[Dict[str, Any]]) -> None:
 
         # Navigate to parent
         target = data
-        for part in parts[:-1]:
-            if isinstance(target, list):
-                target = target[int(part)]
-            elif isinstance(target, dict):
-                target = target[part]
-            else:
-                raise ChartPlanValidationError(f"Cannot navigate path: {path}")
+        try:
+            for part in parts[:-1]:
+                if isinstance(target, list):
+                    target = target[int(part)]
+                elif isinstance(target, dict):
+                    target = target[part]
+                else:
+                    raise ChartPlanValidationError(f"Cannot navigate path: {path}")
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ChartPlanValidationError(f"Cannot navigate path: {path} ({exc})") from exc
 
         final_key = parts[-1]
 
-        if op == "replace":
-            if isinstance(target, list):
-                target[int(final_key)] = value
+        try:
+            if op == "replace":
+                if isinstance(target, list):
+                    target[int(final_key)] = value
+                else:
+                    target[final_key] = value
+            elif op == "add":
+                if isinstance(target, list):
+                    target.insert(int(final_key), value)
+                else:
+                    target[final_key] = value
+            elif op == "remove":
+                if isinstance(target, list):
+                    del target[int(final_key)]
+                elif isinstance(target, dict):
+                    del target[final_key]
             else:
-                target[final_key] = value
-        elif op == "add":
-            if isinstance(target, list):
-                target.insert(int(final_key), value)
-            else:
-                target[final_key] = value
-        elif op == "remove":
-            if isinstance(target, list):
-                del target[int(final_key)]
-            elif isinstance(target, dict):
-                del target[final_key]
-        else:
-            raise ChartPlanValidationError(f"Unsupported patch op: {op}")
+                raise ChartPlanValidationError(f"Unsupported patch op: {op}")
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ChartPlanValidationError(
+                f"Cannot apply op '{op}' at path: {path} ({exc})"
+            ) from exc
 
-    with open(chart_plan_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    # Atomic write via tempfile + os.replace
+    dir_name = os.path.dirname(os.path.abspath(chart_plan_path))
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, chart_plan_path)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise

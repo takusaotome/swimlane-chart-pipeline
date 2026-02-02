@@ -15,6 +15,37 @@ SCHEMA_PATH = (
 )
 
 
+class TestLayoutDefaultsMatchSchema:
+    """C-06: Layout dataclass defaults must match schema defaults."""
+
+    def test_layout_defaults_match_schema_defaults(self):
+        """Each Layout field's default value should match the schema default."""
+        from dataclasses import fields as dc_fields
+
+        from src.swimlane_lib import Layout
+
+        with open(SCHEMA_PATH, "r") as f:
+            schema = json.load(f)
+
+        schema_layout = schema["properties"]["layout"]["properties"]
+        layout = Layout()
+
+        mismatches = []
+        for field in dc_fields(Layout):
+            if field.name in schema_layout:
+                schema_default = schema_layout[field.name].get("default")
+                if schema_default is not None:
+                    actual = getattr(layout, field.name)
+                    if actual != schema_default:
+                        mismatches.append(
+                            f"  {field.name}: Layout={actual}, schema={schema_default}"
+                        )
+
+        assert mismatches == [], "C-06: Layout defaults differ from schema:\n" + "\n".join(
+            mismatches
+        )
+
+
 class TestSchemaLayoutSync:
     """M1: JSON schema layout properties must match Layout dataclass fields."""
 

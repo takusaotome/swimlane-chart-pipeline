@@ -22,7 +22,10 @@ chart_plan.json を入力として、Miro ボード上にスイムレーンチ�
 ## 処理手順
 
 1. 引数で指定された chart_plan.json のパスを確認する
-2. run_id が指定されていない場合は UUID v4 を生成する
+2. run_id の決定:
+   - `/swimlane-pipeline` から呼ばれた場合: パイプラインが生成した run_id を `--run-id` で受け取る
+   - 単独実行の場合: `--run-id` が未指定なら `scripts/generate_chart.py` 内部で UUID v4 を自動生成する
+   - **run_id の生成責務は常に呼び出し元にある**。このスキルは渡された run_id をそのまま使う
 3. `scripts/generate_chart.py` を実行する
 
 ```bash

@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -116,6 +118,58 @@ class TestValidationGaps:
         }
         errors = _validate_raw(raw)
         assert errors == [], f"Valid plan should have no errors, got: {errors}"
+
+
+class TestApplyPatchPathValidation:
+    """C-04: apply_patch should raise ChartPlanValidationError on invalid paths."""
+
+    def _write_plan(self, tmp_path, data):
+        p = tmp_path / "chart_plan.json"
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        return str(p)
+
+    def test_invalid_dict_path_raises_validation_error(self, tmp_path):
+        from src.chart_plan_loader import ChartPlanValidationError, apply_patch
+
+        data = {"layout": {"col_width": 360}}
+        path = self._write_plan(tmp_path, data)
+
+        with pytest.raises(ChartPlanValidationError, match="Cannot navigate"):
+            apply_patch(path, [{"op": "replace", "path": "/nonexistent/foo", "value": 1}])
+
+    def test_invalid_list_index_raises_validation_error(self, tmp_path):
+        from src.chart_plan_loader import ChartPlanValidationError, apply_patch
+
+        data = {"nodes": [{"key": "A", "dx": 0}]}
+        path = self._write_plan(tmp_path, data)
+
+        with pytest.raises(ChartPlanValidationError, match="Cannot navigate"):
+            apply_patch(path, [{"op": "replace", "path": "/nodes/99/dx", "value": 1}])
+
+    def test_non_numeric_list_index_raises_validation_error(self, tmp_path):
+        from src.chart_plan_loader import ChartPlanValidationError, apply_patch
+
+        data = {"nodes": [{"key": "A", "dx": 0}]}
+        path = self._write_plan(tmp_path, data)
+
+        with pytest.raises(ChartPlanValidationError, match="Cannot navigate"):
+            apply_patch(path, [{"op": "replace", "path": "/nodes/abc/dx", "value": 1}])
+
+    def test_apply_patch_uses_atomic_write(self):
+        """apply_patch should use os.replace for atomic writes."""
+        source_path = PROJECT_ROOT / "src" / "chart_plan_loader.py"
+        source = source_path.read_text()
+        tree = ast.parse(source)
+
+        # Find apply_patch function and check for os.replace usage
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "apply_patch":
+                source_text = ast.get_source_segment(source, node)
+                assert "os.replace" in source_text, (
+                    "C-04: apply_patch should use os.replace() for atomic writes"
+                )
+                return
+        pytest.fail("apply_patch function not found")
 
 
 class TestApplyPatch:

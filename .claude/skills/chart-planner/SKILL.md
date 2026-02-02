@@ -89,6 +89,8 @@ user_invocable: true
 `assets/chart_plan_schema.json` に準拠した chart_plan.json を生成し、
 `output/{run_id}/chart_plan.json` に書き込む。
 
+**run_id の取り扱い**: `--run-id` パラメータで受け取る。`/swimlane-pipeline` から呼ばれた場合はパイプラインが生成した run_id が渡される。単独実行で未指定の場合は UUID v4 を自動生成する。chart_plan.json 内の `run_id` フィールドにもこの値を設定する。
+
 ## 出力
 
 - `output/{run_id}/chart_plan.json`

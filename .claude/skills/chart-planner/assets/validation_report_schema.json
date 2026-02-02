@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Validation Report",
+  "description": "Output schema for scripts/validate_chart.py",
+  "type": "object",
+  "required": ["run_id", "frame_id", "item_count", "connector_count", "findings", "summary", "status"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "UUID v4 identifying the chart generation run"
+    },
+    "frame_id": {
+      "type": ["string", "null"],
+      "description": "Miro frame ID containing the chart items"
+    },
+    "item_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of items found in the frame via Miro API readback"
+    },
+    "connector_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of tracked connectors found via Miro API"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "type", "description"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["Critical", "Major", "Minor", "Info"],
+            "description": "Critical: missing connectors. Major: overlapping items, frame overflow. Minor: label truncation. Info: empty lanes."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["overlap", "label_truncation", "missing_connector", "empty_lane", "frame_overflow"],
+            "description": "Finding category"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of the finding"
+          },
+          "item_id": {
+            "type": "string",
+            "description": "Miro item ID (for label_truncation findings)"
+          },
+          "item_a_id": {
+            "type": "string",
+            "description": "First overlapping item ID (for overlap findings)"
+          },
+          "item_b_id": {
+            "type": "string",
+            "description": "Second overlapping item ID (for overlap findings)"
+          },
+          "item_a_content": {
+            "type": "string",
+            "description": "Content of first overlapping item"
+          },
+          "item_b_content": {
+            "type": "string",
+            "description": "Content of second overlapping item"
+          },
+          "miro_id": {
+            "type": "string",
+            "description": "Missing connector Miro ID (for missing_connector findings)"
+          },
+          "lane": {
+            "type": "string",
+            "description": "Lane name (for empty_lane findings)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Full content of truncated item"
+          },
+          "estimated_width": {
+            "type": "number",
+            "description": "Estimated text width in pixels"
+          },
+          "available_width": {
+            "type": "number",
+            "description": "Available width in pixels (shape width minus padding)"
+          },
+          "overflow_right_px": {
+            "type": "number",
+            "description": "Pixels overflowing beyond frame right edge (for frame_overflow findings)"
+          },
+          "overflow_bottom_px": {
+            "type": "number",
+            "description": "Pixels overflowing beyond frame bottom edge (for frame_overflow findings)"
+          },
+          "overflow_left_px": {
+            "type": "number",
+            "description": "Pixels overflowing beyond frame left edge (for frame_overflow findings)"
+          },
+          "overflow_top_px": {
+            "type": "number",
+            "description": "Pixels overflowing beyond frame top edge (for frame_overflow findings)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Count of findings by severity level",
+      "patternProperties": {
+        "^(Critical|Major|Minor|Info)$": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "pass: no Critical or Major findings. fail: at least one Critical or Major finding."
+    }
+  },
+  "additionalProperties": false
+}

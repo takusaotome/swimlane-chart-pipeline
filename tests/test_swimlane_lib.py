@@ -412,6 +412,52 @@ class TestBuildBackgroundItems:
         # 1 outer frame + 0 lane dividers + 0 column gridlines + 1 header separator = 2
         assert len(items) == 2
 
+    def test_background_box_fits_within_frame(self):
+        """Background rectangle should not extend beyond the frame width."""
+        from src.swimlane_lib import Layout, build_background_items, swimlane_total_width
+
+        cfg = Layout()
+        lanes = ["A", "B", "C"]
+        columns = ["C1", "C2", "C3", "C4"]
+        items = build_background_items(cfg, lanes, columns)
+
+        # Frame width = swimlane_total_width + frame_padding
+        frame_w = swimlane_total_width(cfg, len(columns)) + cfg.frame_padding
+
+        # The outer frame background (first item) — its right edge must not exceed frame_w
+        bg = items[0]
+        bg_cx = bg["position"]["x"]
+        bg_w = bg["geometry"]["width"]
+        bg_right = bg_cx + bg_w / 2
+
+        # The frame itself is centred at origin_x; its right edge is origin_x + frame_w / 2
+        frame_right = cfg.origin_x + frame_w / 2
+
+        assert bg_right <= frame_right, (
+            f"Background right edge ({bg_right}) exceeds frame right edge ({frame_right})"
+        )
+
+    def test_dividers_fit_within_frame(self):
+        """Lane divider lines should not extend beyond the frame width."""
+        from src.swimlane_lib import Layout, build_background_items, swimlane_total_width
+
+        cfg = Layout()
+        lanes = ["A", "B", "C"]
+        columns = ["C1", "C2", "C3"]
+        items = build_background_items(cfg, lanes, columns)
+
+        frame_w = swimlane_total_width(cfg, len(columns)) + cfg.frame_padding
+        frame_right = cfg.origin_x + frame_w / 2
+
+        # Lane dividers are items[1] through items[num_lanes-1]
+        for item in items[1:]:
+            w = item["geometry"]["width"]
+            cx = item["position"]["x"]
+            right = cx + w / 2
+            assert right <= frame_right, (
+                f"Divider right edge ({right}) exceeds frame right edge ({frame_right})"
+            )
+
 
 class TestBuildTextItems:
     """Tests for build_text_items()."""
@@ -655,6 +701,113 @@ class TestRetryDecorator:
 # ---------------------------------------------------------------------------
 
 
+class TestRetry4xxImmediate:
+    """C-03: retry should not retry 4xx errors (except 429)."""
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_no_retry_on_400(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.headers = {}
+
+        @retry(max_attempts=3, backoff_schedule=[0.1])
+        def fail_400():
+            nonlocal call_count
+            call_count += 1
+            raise requests.exceptions.HTTPError("400 Bad Request", response=mock_resp)
+
+        with pytest.raises(requests.exceptions.HTTPError):
+            fail_400()
+        assert call_count == 1, "400 should not be retried"
+        mock_sleep.assert_not_called()
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_no_retry_on_404(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_resp.headers = {}
+
+        @retry(max_attempts=3, backoff_schedule=[0.1])
+        def fail_404():
+            nonlocal call_count
+            call_count += 1
+            raise requests.exceptions.HTTPError("404 Not Found", response=mock_resp)
+
+        with pytest.raises(requests.exceptions.HTTPError):
+            fail_404()
+        assert call_count == 1, "404 should not be retried"
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_429_still_retried(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+        mock_resp = MagicMock()
+        mock_resp.status_code = 429
+        mock_resp.headers = {}
+
+        @retry(max_attempts=3, backoff_schedule=[0.1])
+        def fail_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise requests.exceptions.HTTPError("429", response=mock_resp)
+            return "ok"
+
+        assert fail_then_succeed() == "ok"
+        assert call_count == 3, "429 should be retried"
+
+    def test_non_http_exception_propagates(self):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+
+        @retry(max_attempts=3, backoff_schedule=[0.1])
+        def fail_json():
+            nonlocal call_count
+            call_count += 1
+            raise json.JSONDecodeError("msg", "doc", 0)
+
+        with pytest.raises(json.JSONDecodeError):
+            fail_json()
+        assert call_count == 1, "Non-HTTP errors should propagate immediately"
+
+
+class TestBulkCreateCountVerification:
+    """C-02: bulk_create should verify response count matches request count."""
+
+    def test_bulk_create_raises_on_count_mismatch(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        # Send 3 items, API returns only 2
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": [{"id": "1"}, {"id": "2"}]}
+
+        with patch("src.swimlane_lib.requests.post", return_value=mock_resp):
+            with pytest.raises(RuntimeError, match="count mismatch"):
+                client.bulk_create([{"type": "shape"}, {"type": "shape"}, {"type": "shape"}])
+
+    def test_bulk_create_passes_on_matching_count(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}
+
+        with patch("src.swimlane_lib.requests.post", return_value=mock_resp):
+            result = client.bulk_create([{"type": "shape"}, {"type": "shape"}, {"type": "shape"}])
+        assert len(result) == 3
+
+
 class TestMiroClientInit:
     """Tests for MiroClient initialization."""
 
@@ -821,6 +974,45 @@ class TestMiroClientReadbackFrameItems:
         client = MiroClient(token="tok", board_id="board")
         client.get_frame_items = MagicMock(return_value={"data": []})
         assert client.readback_frame_items("frame-1") == []
+
+
+class TestPaginationEmptyPage:
+    """C-05: Pagination should continue through empty pages when cursor is present."""
+
+    def test_find_rightmost_frame_continues_through_empty_page(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        # Page 1: has items + cursor
+        page1 = {
+            "data": [
+                {"type": "shape", "position": {"x": 100}, "geometry": {"width": 200}},
+            ],
+            "cursor": "page2",
+        }
+        # Page 2: empty but has cursor
+        page2 = {"data": [], "cursor": "page3"}
+        # Page 3: has the frame we're looking for
+        page3 = {
+            "data": [
+                {"type": "frame", "position": {"x": 500, "y": 10}, "geometry": {"width": 200}},
+            ],
+        }
+        client.get_items = MagicMock(side_effect=[page1, page2, page3])
+        assert client.find_rightmost_frame() == (600, 10)
+        assert client.get_items.call_count == 3
+
+    def test_readback_frame_items_continues_through_empty_page(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        page1 = {"data": [{"id": "1"}], "cursor": "pg2"}
+        page2 = {"data": [], "cursor": "pg3"}
+        page3 = {"data": [{"id": "2"}]}
+        client.get_frame_items = MagicMock(side_effect=[page1, page2, page3])
+        result = client.readback_frame_items("frame-1")
+        assert result == [{"id": "1"}, {"id": "2"}]
+        assert client.get_frame_items.call_count == 3
 
 
 @patch("src.swimlane_lib.time.sleep")

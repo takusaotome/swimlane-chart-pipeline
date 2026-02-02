@@ -22,3 +22,6 @@ htmlcov/
 
 # Pipeline output
 output/
+
+# Review reports
+review/

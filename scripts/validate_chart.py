@@ -18,9 +18,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -182,6 +185,55 @@ def check_connector_completeness(
     return findings
 
 
+def check_frame_overflow(
+    items: List[Dict], frame_width: float, frame_height: float
+) -> List[Dict[str, Any]]:
+    """Detect items whose bounding box extends beyond the frame boundary.
+
+    Frame-relative coordinates: the frame spans (0, 0) to (frame_width, frame_height).
+    """
+    findings: List[Dict[str, Any]] = []
+
+    for item in items:
+        bbox = get_bbox(item)
+        if bbox is None:
+            continue
+        x1, y1, x2, y2 = bbox
+
+        overflows: List[str] = []
+        overflow_px: Dict[str, float] = {}
+
+        if x2 > frame_width:
+            overflows.append("right")
+            overflow_px["overflow_right_px"] = x2 - frame_width
+        if y2 > frame_height:
+            overflows.append("bottom")
+            overflow_px["overflow_bottom_px"] = y2 - frame_height
+        if x1 < 0:
+            overflows.append("left")
+            overflow_px["overflow_left_px"] = -x1
+        if y1 < 0:
+            overflows.append("top")
+            overflow_px["overflow_top_px"] = -y1
+
+        if overflows:
+            content = item.get("data", {}).get("content", "")
+            findings.append(
+                {
+                    "severity": "Major",
+                    "type": "frame_overflow",
+                    "description": (
+                        f"Item {item.get('id', '?')} overflows frame ({', '.join(overflows)})"
+                    ),
+                    "item_id": item.get("id"),
+                    "content": content,
+                    **overflow_px,
+                }
+            )
+
+    return findings
+
+
 def check_lane_balance(chart_plan: Dict) -> List[Dict[str, Any]]:
     """Check for empty or overly dense lanes."""
     findings: List[Dict[str, Any]] = []
@@ -231,9 +283,9 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
     api = MiroClient()
 
     # Read back items from frame
-    print(f"Reading back items from frame {frame_id}...")
+    logger.info("Reading back items from frame %s...", frame_id)
     frame_items = api.readback_frame_items(frame_id) if frame_id else []
-    print(f"Found {len(frame_items)} items in frame.")
+    logger.info("Found %d items in frame.", len(frame_items))
 
     # Read back connectors (board-wide, then filter)
     all_connectors: List[Dict] = []
@@ -243,7 +295,7 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
         items = data.get("data", [])
         all_connectors.extend(items)
         next_cursor = data.get("cursor")
-        if not next_cursor or not items:
+        if not next_cursor:
             break
         cursor = next_cursor
 
@@ -251,11 +303,28 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
     tracked_conn_ids = {c.get("miro_id") for c in tracked.get("connectors", [])}
     run_connectors = [c for c in all_connectors if c.get("id") in tracked_conn_ids]
 
+    # Get frame geometry for overflow check
+    frame_geom_w: Optional[float] = None
+    frame_geom_h: Optional[float] = None
+    if frame_id:
+        try:
+            frame_data = api.get_item(frame_id)
+            geom = frame_data.get("geometry", {})
+            w_val = geom.get("width")
+            h_val = geom.get("height")
+            if isinstance(w_val, (int, float)) and isinstance(h_val, (int, float)):
+                frame_geom_w = float(w_val)
+                frame_geom_h = float(h_val)
+        except Exception:
+            logger.warning("Could not read frame geometry for overflow check.")
+
     # Run checks
     findings: List[Dict[str, Any]] = []
     findings.extend(check_overlaps(frame_items))
     findings.extend(check_label_truncation(frame_items))
     findings.extend(check_connector_completeness(tracked, run_connectors))
+    if frame_geom_w is not None and frame_geom_h is not None:
+        findings.extend(check_frame_overflow(frame_items, frame_geom_w, frame_geom_h))
     if chart_plan:
         findings.extend(check_lane_balance(chart_plan))
 
@@ -283,9 +352,9 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    print(f"Validation report: {report_path}")
-    print(f"Status: {report['status']}")
-    print(f"Findings: {severity_counts}")
+    logger.info("Validation report: %s", report_path)
+    logger.info("Status: %s", report["status"])
+    logger.info("Findings: %s", severity_counts)
     return report
 
 
@@ -295,6 +364,7 @@ def main() -> None:
     parser.add_argument("--chart-plan", default=None, help="Path to chart_plan.json (optional)")
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     validate(args.miro_items, args.chart_plan)
 
 

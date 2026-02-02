@@ -20,17 +20,17 @@
     "翌月5日 10:00"
   ],
   "layout": {
-    "lane_height": 220,
-    "col_width": 360,
-    "left_label_width": 240,
+    "lane_height": 200,
+    "col_width": 420,
+    "left_label_width": 260,
     "header_height": 80,
     "frame_padding": 200,
-    "task_w": 170,
+    "task_w": 160,
     "task_h": 80,
-    "decision_w": 90,
-    "decision_h": 90,
-    "chip_w": 90,
-    "chip_h": 26
+    "decision_w": 110,
+    "decision_h": 110,
+    "chip_w": 130,
+    "chip_h": 28
   },
   "nodes": [
     {

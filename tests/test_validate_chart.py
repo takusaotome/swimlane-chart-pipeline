@@ -406,6 +406,84 @@ class TestCheckConnectorCompleteness:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# check_frame_overflow
+# ---------------------------------------------------------------------------
+
+
+class TestCheckFrameOverflow:
+    """Tests for check_frame_overflow()."""
+
+    def _make_item(self, id_: str, x: float, y: float, w: float, h: float) -> dict:
+        return {
+            "id": id_,
+            "type": "shape",
+            "data": {"content": f"Item {id_}"},
+            "position": {"x": x, "y": y},
+            "geometry": {"width": w, "height": h},
+        }
+
+    def test_item_inside_frame_no_finding(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        items = [self._make_item("a", 500, 300, 100, 80)]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert findings == []
+
+    def test_item_overflow_right(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        # Item centre at x=980, width=100 → right edge = 1030, frame_width=1000
+        items = [self._make_item("a", 980, 300, 100, 80)]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert len(findings) == 1
+        assert findings[0]["type"] == "frame_overflow"
+        assert findings[0]["severity"] == "Major"
+
+    def test_item_overflow_bottom(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        # Item centre at y=580, height=80 → bottom edge = 620, frame_height=600
+        items = [self._make_item("a", 500, 580, 100, 80)]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert len(findings) == 1
+        assert findings[0]["type"] == "frame_overflow"
+
+    def test_item_on_boundary_no_finding(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        # Item right edge exactly at frame_width → no overflow
+        # x=950, w=100 → right edge = 1000 = frame_width
+        items = [self._make_item("a", 950, 300, 100, 80)]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert findings == []
+
+    def test_skips_items_without_geometry(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        items = [{"id": "no-geom", "type": "connector"}]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert findings == []
+
+    def test_item_overflow_left(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        # Item centre at x=30, width=100 → left edge = -20 < 0
+        items = [self._make_item("a", 30, 300, 100, 80)]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert len(findings) == 1
+        assert findings[0]["type"] == "frame_overflow"
+
+    def test_item_overflow_top(self):
+        from scripts.validate_chart import check_frame_overflow
+
+        # Item centre at y=20, height=80 → top edge = -20 < 0
+        items = [self._make_item("a", 500, 20, 100, 80)]
+        findings = check_frame_overflow(items, frame_width=1000, frame_height=600)
+        assert len(findings) == 1
+        assert findings[0]["type"] == "frame_overflow"
+
+
 class TestValidateOrchestration:
     """Tests for the validate() function end-to-end with mocked MiroClient."""
 
@@ -537,3 +615,45 @@ class TestValidateOrchestration:
         empty_lane = [f for f in report["findings"] if f["type"] == "empty_lane"]
         assert len(empty_lane) == 1
         assert empty_lane[0]["lane"] == "B"
+
+    def test_detects_frame_overflow_in_validate(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        mock_api = MagicMock()
+        # Item overflows frame on the right: x=980, w=100 → right=1030, frame_width=1000
+        mock_api.readback_frame_items.return_value = [
+            {
+                "id": "i1",
+                "type": "shape",
+                "data": {"content": "Overflow"},
+                "position": {"x": 980, "y": 300},
+                "geometry": {"width": 100, "height": 80},
+                "style": {},
+            },
+        ]
+        mock_api.get_connectors.return_value = {"data": []}
+        mock_api.get_item.return_value = {
+            "id": "frame-1",
+            "type": "frame",
+            "geometry": {"width": 1000, "height": 600},
+        }
+
+        monkeypatch.setattr("scripts.validate_chart.MiroClient", lambda: mock_api)
+
+        miro_items_path = self._write_miro_items(
+            tmp_path,
+            {
+                "run_id": "test-run",
+                "frame_id": "frame-1",
+                "items": [],
+                "connectors": [],
+            },
+        )
+
+        from scripts.validate_chart import validate
+
+        report = validate(miro_items_path)
+
+        assert report["status"] == "fail"
+        overflow_findings = [f for f in report["findings"] if f["type"] == "frame_overflow"]
+        assert len(overflow_findings) == 1

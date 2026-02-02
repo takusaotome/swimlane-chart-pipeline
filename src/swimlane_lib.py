@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from typing import (
 
 import requests
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -52,6 +55,13 @@ def retry(
                 except requests.exceptions.HTTPError as exc:
                     last_exc = exc
                     resp = exc.response
+                    # 4xx errors (except 429) are not retryable
+                    if (
+                        resp is not None
+                        and 400 <= resp.status_code < 500
+                        and resp.status_code != 429
+                    ):
+                        raise
                     if resp is not None and resp.status_code == 429:
                         retry_after = resp.headers.get("Retry-After")
                         wait = (
@@ -85,24 +95,24 @@ class Layout:
     origin_x: int = 0
     origin_y: int = 0
 
-    left_label_width: int = 240
+    left_label_width: int = 260
     header_height: int = 80
-    lane_height: int = 220
+    lane_height: int = 200
     lane_gap: int = 0
     frame_padding: int = 200
 
-    col_width: int = 360
+    col_width: int = 420
     col_gap: int = 0
 
     divider_thickness: int = 8
     gridline_thickness: int = 8
 
-    task_w: int = 170
+    task_w: int = 160
     task_h: int = 80
-    decision_w: int = 90
-    decision_h: int = 90
-    chip_w: int = 90
-    chip_h: int = 26
+    decision_w: int = 110
+    decision_h: int = 110
+    chip_w: int = 130
+    chip_h: int = 28
 
     title_y_offset: int = 260
 
@@ -159,14 +169,14 @@ def swimlane_top_left(cfg: Layout, num_lanes: int, num_columns: int) -> Tuple[in
 
 
 def lane_center_y(cfg: Layout, lane_i: int, num_lanes: int, num_columns: int) -> int:
-    _tlx, tly = swimlane_top_left(cfg, num_lanes, num_columns)
-    lane_top = tly + cfg.header_height + lane_i * (cfg.lane_height + cfg.lane_gap)
+    _top_left_x, top_left_y = swimlane_top_left(cfg, num_lanes, num_columns)
+    lane_top = top_left_y + cfg.header_height + lane_i * (cfg.lane_height + cfg.lane_gap)
     return lane_top + cfg.lane_height // 2
 
 
 def col_center_x(cfg: Layout, col_i: int, num_lanes: int, num_columns: int) -> int:
-    tlx, _tly = swimlane_top_left(cfg, num_lanes, num_columns)
-    col_left = tlx + cfg.left_label_width + col_i * (cfg.col_width + cfg.col_gap)
+    top_left_x, _top_left_y = swimlane_top_left(cfg, num_lanes, num_columns)
+    col_left = top_left_x + cfg.left_label_width + col_i * (cfg.col_width + cfg.col_gap)
     return col_left + cfg.col_width // 2
 
 
@@ -272,10 +282,10 @@ def build_background_items(
 
     w = swimlane_total_width(cfg, num_columns)
     h = swimlane_total_height(cfg, num_lanes)
-    tlx, tly = swimlane_top_left(cfg, num_lanes, num_columns)
+    top_left_x, top_left_y = swimlane_top_left(cfg, num_lanes, num_columns)
 
     frame_w = w + cfg.frame_padding
-    frame_cx = cfg.origin_x + cfg.frame_padding // 2
+    frame_cx = cfg.origin_x
 
     # Outer frame
     items.append(
@@ -294,7 +304,7 @@ def build_background_items(
 
     # Lane divider lines (horizontal)
     for i in range(1, num_lanes):
-        y = tly + cfg.header_height + i * cfg.lane_height
+        y = top_left_y + cfg.header_height + i * cfg.lane_height
         items.append(
             shape_payload(
                 content="",
@@ -309,7 +319,7 @@ def build_background_items(
 
     # Column gridlines (vertical)
     for i in range(1, num_columns):
-        x = tlx + cfg.left_label_width + i * cfg.col_width
+        x = top_left_x + cfg.left_label_width + i * cfg.col_width
         items.append(
             shape_payload(
                 content="",
@@ -323,7 +333,7 @@ def build_background_items(
         )
 
     # Header separator
-    header_sep_y = tly + cfg.header_height
+    header_sep_y = top_left_y + cfg.header_height
     items.append(
         shape_payload(
             content="",
@@ -351,17 +361,17 @@ def build_text_items(
     num_columns = len(columns)
 
     w = swimlane_total_width(cfg, num_columns)
-    tlx, tly = swimlane_top_left(cfg, num_lanes, num_columns)
+    top_left_x, top_left_y = swimlane_top_left(cfg, num_lanes, num_columns)
 
     # Title / subtitle
-    title_x = tlx + w // 2
-    title_y = tly - 80
+    title_x = top_left_x + w // 2
+    title_y = top_left_y - 80
     items.append(
         {
             "type": "shape",
             "data": {"shape": "rectangle", "content": title},
             "position": {"x": title_x, "y": title_y},
-            "geometry": {"width": 600, "height": 50},
+            "geometry": {"width": TITLE_WIDTH, "height": TITLE_HEIGHT},
             "style": {
                 "fillOpacity": 0.0,
                 "borderOpacity": 0.0,
@@ -376,7 +386,7 @@ def build_text_items(
             "type": "shape",
             "data": {"shape": "rectangle", "content": subtitle},
             "position": {"x": title_x, "y": title_y + 46},
-            "geometry": {"width": 600, "height": 36},
+            "geometry": {"width": TITLE_WIDTH, "height": SUBTITLE_HEIGHT},
             "style": {
                 "fillOpacity": 0.0,
                 "borderOpacity": 0.0,
@@ -389,14 +399,14 @@ def build_text_items(
     )
 
     # Column labels
-    header_y = tly + cfg.header_height // 2
+    header_y = top_left_y + cfg.header_height // 2
     for i, col_name in enumerate(columns):
         x = col_center_x(cfg, i, num_lanes, num_columns)
         items.append(text_payload(col_name, x, header_y, font_size=14))
 
     # Lane labels
     for i, lane_name in enumerate(lanes):
-        x = tlx + cfg.left_label_width // 2
+        x = top_left_x + cfg.left_label_width // 2
         y = lane_center_y(cfg, i, num_lanes, num_columns)
         items.append(text_payload(lane_name, x, y, font_size=16))
 
@@ -424,8 +434,8 @@ def build_node_items(
                     content=n.label,
                     x=x,
                     y=y,
-                    w=50,
-                    h=50,
+                    w=START_END_SIZE,
+                    h=START_END_SIZE,
                     shape="circle",
                     fill=n.fill or "#BFE9D6",
                     stroke="#1a1a1a",
@@ -438,8 +448,8 @@ def build_node_items(
                     content=n.label,
                     x=x,
                     y=y,
-                    w=50,
-                    h=50,
+                    w=START_END_SIZE,
+                    h=START_END_SIZE,
                     shape="circle",
                     fill=n.fill or "#DDDDDD",
                     stroke="#1a1a1a",
@@ -498,7 +508,16 @@ def build_node_items(
 # ---------------------------------------------------------------------------
 
 
-def chunked(xs: List, n: int = 20) -> Iterable[List]:
+BULK_BATCH_SIZE = 20
+PAGINATION_LIMIT = 50
+CLEANUP_THROTTLE_SECONDS = 0.1
+TITLE_WIDTH = 600
+TITLE_HEIGHT = 50
+SUBTITLE_HEIGHT = 36
+START_END_SIZE = 50
+
+
+def chunked(xs: List, n: int = BULK_BATCH_SIZE) -> Iterable[List]:
     for i in range(0, len(xs), n):
         yield xs[i : i + n]
 
@@ -557,14 +576,20 @@ class MiroClient:
         self._raise_for_status(resp)
         data = resp.json()
 
+        result: List[Dict] = []
         if isinstance(data, dict):
             if "data" in data and isinstance(data["data"], list):
-                return data["data"]
-            if "items" in data and isinstance(data["items"], list):
-                return data["items"]
-        if isinstance(data, list):
-            return data
-        return []
+                result = data["data"]
+            elif "items" in data and isinstance(data["items"], list):
+                result = data["items"]
+        elif isinstance(data, list):
+            result = data
+
+        if len(result) != len(items):
+            raise RuntimeError(
+                f"Bulk create count mismatch: sent {len(items)} items, received {len(result)} back"
+            )
+        return result
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
     def create_connector(self, body: Dict) -> Dict:
@@ -629,7 +654,7 @@ class MiroClient:
         return resp.json()
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
-    def get_items(self, cursor: Optional[str] = None, limit: int = 50) -> Dict:
+    def get_items(self, cursor: Optional[str] = None, limit: int = PAGINATION_LIMIT) -> Dict:
         """List board items (paginated)."""
         url = f"{self.base}/boards/{self.board_id}/items"
         params: Dict[str, Any] = {"limit": limit}
@@ -645,7 +670,7 @@ class MiroClient:
         return resp.json()
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
-    def get_connectors(self, cursor: Optional[str] = None, limit: int = 50) -> Dict:
+    def get_connectors(self, cursor: Optional[str] = None, limit: int = PAGINATION_LIMIT) -> Dict:
         """List board connectors (paginated)."""
         url = f"{self.base}/boards/{self.board_id}/connectors"
         params: Dict[str, Any] = {"limit": limit}
@@ -689,7 +714,9 @@ class MiroClient:
         return resp.json()
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
-    def get_frame_items(self, frame_id: str, cursor: Optional[str] = None, limit: int = 50) -> Dict:
+    def get_frame_items(
+        self, frame_id: str, cursor: Optional[str] = None, limit: int = PAGINATION_LIMIT
+    ) -> Dict:
         """Get items inside a specific frame using parent_item_id query param."""
         url = f"{self.base}/boards/{self.board_id}/items"
         params: Dict[str, Any] = {"limit": limit, "parent_item_id": frame_id}
@@ -749,7 +776,7 @@ class MiroClient:
                         center_y = pos.get("y", 0)
 
             next_cursor = data.get("cursor")
-            if not next_cursor or not items_list:
+            if not next_cursor:
                 break
             cursor = next_cursor
 
@@ -768,7 +795,7 @@ class MiroClient:
             items_list = data.get("data", [])
             all_items.extend(items_list)
             next_cursor = data.get("cursor")
-            if not next_cursor or not items_list:
+            if not next_cursor:
                 break
             cursor = next_cursor
         return all_items
@@ -794,7 +821,7 @@ class MiroClient:
             try:
                 self.get_item(frame_id)
             except requests.exceptions.RequestException:
-                print(f"Frame {frame_id} not found — already cleaned up.")
+                logger.info("Frame %s not found — already cleaned up.", frame_id)
                 return counts
 
         # 1. Delete connectors first
@@ -804,10 +831,10 @@ class MiroClient:
                 try:
                     self.delete_connector(miro_id)
                     counts["connectors"] += 1
-                    time.sleep(0.1)
+                    time.sleep(CLEANUP_THROTTLE_SECONDS)
                 except requests.exceptions.RequestException as exc:
                     counts["skipped"] += 1
-                    print(f"WARN: Failed to delete connector {miro_id}: {exc}")
+                    logger.warning("Failed to delete connector %s: %s", miro_id, exc)
 
         # 2. Delete items (shapes, text)
         for item in tracked.get("items", []):
@@ -816,10 +843,10 @@ class MiroClient:
                 try:
                     self.delete_item(miro_id)
                     counts["items"] += 1
-                    time.sleep(0.1)
+                    time.sleep(CLEANUP_THROTTLE_SECONDS)
                 except requests.exceptions.RequestException as exc:
                     counts["skipped"] += 1
-                    print(f"WARN: Failed to delete item {miro_id}: {exc}")
+                    logger.warning("Failed to delete item %s: %s", miro_id, exc)
 
         # 3. Delete frame last
         if frame_id:
@@ -828,7 +855,7 @@ class MiroClient:
                 counts["frame"] += 1
             except requests.exceptions.RequestException as exc:
                 counts["skipped"] += 1
-                print(f"WARN: Failed to delete frame {frame_id}: {exc}")
+                logger.warning("Failed to delete frame %s: %s", frame_id, exc)
 
         return counts
 

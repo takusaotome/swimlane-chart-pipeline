@@ -35,7 +35,7 @@ user_invocable: true
 
 ### 0. 初期化
 
-1. run_id (UUID v4) を生成する
+1. **run_id (UUID v4) を生成する** — run_id の生成はこのパイプラインの責務。全てのサブステップ（process-analyzer, chart-planner, chart-generator 等）にこの run_id を `--run-id` パラメータで渡す。各スキルが独自に run_id を生成することはない
 2. `output/{run_id}/` ディレクトリを作成する
 3. ユーザーに run_id を通知する
 
@@ -118,6 +118,26 @@ python scripts/validate_chart.py output/{run_id}/miro_items.json --chart-plan ou
    d. Step 4 から再実行
 
 5. **最大3ラウンド**。3ラウンド後に問題残存 → 現状のまま結果提示
+
+#### Step 2 レビューループ状態遷移
+
+| 現在の状態 | イベント | 遷移先 | 処理 |
+|---|---|---|---|
+| レビュー中 | `chartability: "ready"` | Step 3 へ | 修正済みファイルで続行 |
+| レビュー中 | Critical/Major & ラウンド < 3 | レビュー中 | パッチ適用 → 再レビュー |
+| レビュー中 | Critical/Major & ラウンド = 3 | エスカレーション | 残存問題をユーザーに提示 |
+| レビュー中 | Minor/Info のみ | Step 3 へ | 自動適用して続行 |
+| レビュー中 | ユーザーが「続行」 | Step 3 へ | 現状のまま続行 |
+
+#### Step 5 レイアウトレビューループ状態遷移
+
+| 現在の状態 | イベント | 遷移先 | 処理 |
+|---|---|---|---|
+| レビュー中 | `status: "pass"` | **完了** | 最終結果を提示 |
+| レビュー中 | `status: "needs_fix"` & ラウンド < 3 | 修正中 | パッチをユーザーに提示 |
+| 修正中 | ユーザー承認 | レビュー中 | パッチ適用 → cleanup → Step 4 再実行 |
+| 修正中 | ユーザー拒否 | **完了** | 現状のまま結果提示 |
+| レビュー中 | `status: "needs_fix"` & ラウンド = 3 | **完了** | 残存問題を提示、現状のまま結果提示 |
 
 ### 完了
 

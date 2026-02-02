@@ -105,6 +105,12 @@ Task ツールで `process-analyst` agent を呼び出し、テキストから�
 - [Q]: [質問内容] → [A]: [回答内容]
 ```
 
+## run_id の取り扱い
+
+- `--run-id` パラメータで受け取る。`/swimlane-pipeline` から呼ばれた場合はパイプラインが生成した run_id が渡される
+- 単独実行で未指定の場合は UUID v4 を自動生成する
+- **run_id の生成責務は `/swimlane-pipeline` にある**。各スキルは渡された run_id を使用し、独自に生成することは推奨しない
+
 ## 出力
 
 - `output/{run_id}/requirements.md`

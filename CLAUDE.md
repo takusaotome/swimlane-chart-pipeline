@@ -61,12 +61,35 @@ Agents: `process-consultant`（要件レビュー）、`chart-layout-reviewer`�
 - **出力ディレクトリ**: `output/{run_id}/` に `miro_items.json` と `validation_report.json` を格納
 - ノードの `key` は `UPPER_SNAKE_CASE`、`kind` は `task|decision|start|end|chip|text`
 
+## CLI Options
+
+### `scripts/cleanup_chart.py --force`
+
+`--force` フラグは、削除前のアイテム数照合チェックをスキップする。通常、cleanup はフレーム内のアイテム数（Miro API readback）と miro_items.json の記録件数を比較し、不一致時にユーザー確認を求める。`--force` を指定すると、この確認を省略して即座に削除を実行する。パイプラインの自動リトライループ（Step 5 → cleanup → Step 4 再実行）では `--force` を使用する。
+
 ## Miro API Constraints
 
 - Bulk API: 1 トランザクションあたり最大 20 アイテム（`chunked()` で分割）
 - コネクタはバルク作成不可、1 本ずつ作成
 - レート制限: 100,000 credits/分
 - コネクタのルーティングは Miro 側が自動決定
+
+### 最悪ケースの API 呼出回数
+
+100ノード + 50コネクタの場合の概算:
+
+| 操作 | 呼出回数 | 備考 |
+|---|---|---|
+| Frame 作成 | 1 | |
+| 既存 Frame 検索 | ceil(全アイテム数 / 50) | ページネーション |
+| Bulk create (背景+テキスト+フローノード) | ceil(アイテム数 / 20) | ~10回 |
+| コネクタ作成 | 50 | 1本ずつ |
+| miro_items.json flush | バッチ数回 | ファイルI/O、API呼出なし |
+| **合計（生成）** | **~65回** | リトライなし |
+| cleanup (削除) | 50 + 100 + 1 = 151 | コネクタ→アイテム→Frame |
+| **合計（生成+削除）** | **~216回** | |
+
+レート制限（100,000 credits/分、Level 1 = 50 credits/call）に対して、216回 × 50 = 10,800 credits で十分余裕がある。
 
 ## Development Practices
 

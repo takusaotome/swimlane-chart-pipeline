@@ -68,7 +68,21 @@ requirements.md（業務プロセス要件定義書）のテキストがユー�
 ## patch フィールドの規則
 
 - Critical/Major の指摘には必ず `patch` フィールドを含める
-- `patch` は requirements.md に追記/修正するテキスト差分
+- `patch` は **requirements.md（Markdown）に対するテキスト差分**
+- 呼び出し元（requirements-reviewer skill）が Edit ツールの `old_string` / `new_string` で適用する
+- **JSON Patch（`{"op": "replace", "path": "..."}`形式）ではない**。JSON Patch は chart_plan.json 用であり、このエージェントでは使用しない
 - 事実の書き換え（ユーザーが述べた内容の変更）は行わない
 - 追記・明確化・構造化のみ
 - Minor/Info には `patch` は任意
+
+### patch の記述例
+
+```json
+{
+  "id": "F002",
+  "severity": "Major",
+  "patch": "### Step 3.5: データ引き渡し（追加）\n- **担当部門**: 営業企画部\n- **処理内容**: 集計完了後、経理部にメールで完了通知を送付"
+}
+```
+
+この `patch` テキストは、requirements.md の該当箇所（`location` で指定）に挿入または置換として適用される。

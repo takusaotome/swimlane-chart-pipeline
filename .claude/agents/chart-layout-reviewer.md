@@ -27,6 +27,7 @@ model: sonnet
 8. **判断ダイヤモンドのラベル収まり**: rhombus 内のテキスト収まり（110×110 で日本語4文字/行を目安）
 9. **逆流エッジの視認性**: dashed/curved エッジの見やすさ
 10. **end ノードの配置**: フロー終端として自然な位置にあるか
+11. **フレーム境界はみ出し**: ノードや背景矩形がフレーム外にはみ出していないか（validation_report の `frame_overflow` 型の finding）
 
 ## 修正判断基準
 
@@ -37,6 +38,7 @@ model: sonnet
 - **レーン密度**: lane_height の拡大、またはノード配置の dx/dy 調整
 - **色不一致**: fill カラーの統一修正
 - **end 配置**: end ノードの lane/col/dx/dy を修正
+- **フレームはみ出し**: `/nodes/{index}/dx` で内側に寄せる、または `/layout/frame_padding` を拡大
 
 ## 出力形式
 

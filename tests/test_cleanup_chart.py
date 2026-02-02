@@ -75,3 +75,22 @@ class TestNonTTYSafety:
             "C2: input() was called in non-TTY environment — "
             "cleanup_chart should check sys.stdin.isatty() first"
         )
+
+    def test_cleanup_exits_nonzero_on_non_tty_mismatch(self, miro_items_file, monkeypatch):
+        """M-05: In non-TTY mode with count mismatch, should exit with code 1."""
+        mock_api = MagicMock()
+        mock_api.board_id = "test-board"
+        mock_api.get_frame_items.return_value = {
+            "data": [{"id": "x"}, {"id": "y"}, {"id": "z"}],
+        }
+
+        monkeypatch.setattr("scripts.cleanup_chart.MiroClient", lambda *a, **kw: mock_api)
+
+        fake_stdin = io.StringIO("")
+        monkeypatch.setattr("sys.stdin", fake_stdin)
+
+        from scripts.cleanup_chart import cleanup
+
+        with pytest.raises(SystemExit) as exc_info:
+            cleanup(miro_items_file, force=False)
+        assert exc_info.value.code == 1
