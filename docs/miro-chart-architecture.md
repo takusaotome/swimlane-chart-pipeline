@@ -96,20 +96,20 @@ swimlane_chart.py
 
 | カテゴリ | フィールド | デフォルト値 | 説明 |
 |---|---|---|---|
-| 原点 | `origin_x`, `origin_y` | 0, 0 | ダイアグラム中心座標 |
-| レーン | `left_label_width` | 240 | 左端のレーンラベル領域幅 |
+| 原点 | `origin_x`, `origin_y` | 0, 0 | ダイアグラム中心座標（Frame内ではFrame中心に設定） |
+| レーン | `left_label_width` | 260 | 左端のレーンラベル領域幅 |
 | | `header_height` | 80 | 時系列ヘッダー行の高さ |
-| | `lane_height` | 220 | 各レーンの高さ |
+| | `lane_height` | 200 | 各レーンの高さ（6-10レーン時） |
 | | `lane_gap` | 0 | レーン間の間隔 |
-| カラム | `col_width` | 360 | 各時系列カラムの幅 |
+| カラム | `col_width` | 420 | 各時系列カラムの幅 |
 | | `col_gap` | 0 | カラム間の間隔 |
 | 罫線 | `divider_thickness` | 3 | レーン/カラム区切り線の太さ |
 | | `gridline_thickness` | 3 | グリッド線の太さ |
-| ノード | `task_w` x `task_h` | 170 x 80 | タスクノードのデフォルトサイズ |
-| | `decision_w` x `decision_h` | 90 x 90 | 判断ノードのデフォルトサイズ |
-| | `chip_w` x `chip_h` | 90 x 26 | チップ（システム名タグ）のデフォルトサイズ |
+| ノード | `task_w` x `task_h` | 160 x 80 | タスクノードのデフォルトサイズ |
+| | `decision_w` x `decision_h` | 110 x 110 | 判断ノードのデフォルトサイズ |
+| | `chip_w` x `chip_h` | 130 x 28 | チップ（システム名タグ）のデフォルトサイズ |
 | タイトル | `title_y_offset` | 260 | スイムレーン上端からのタイトル表示距離 |
-| | `frame_padding` | 140 | フレーム外側の余白 |
+| | `frame_padding` | 200 | フレーム外側の余白 |
 
 ---
 
@@ -161,8 +161,12 @@ total_height = len(LANES) * lane_height + (len(LANES) - 1) * lane_gap + header_h
 
 | 操作 | メソッド | エンドポイント | 備考 |
 |---|---|---|---|
-| Bulk 作成 | POST | `/v2/boards/{board_id}/items/bulk` | 最大 20 アイテム/回、トランザクション |
+| Frame 作成 | POST | `/v2/boards/{board_id}/frames` | 各 run ごとに専用 Frame を作成 |
+| Bulk 作成 | POST | `/v2/boards/{board_id}/items/bulk` | 最大 20 アイテム/回、トランザクション。`parent` プロパティで Frame 内に配置 |
 | コネクタ作成 | POST | `/v2/boards/{board_id}/connectors` | startItem/endItem で既存アイテムを接続 |
+| Frame 内アイテム取得 | GET | `/v2/boards/{board_id}/items?parent_item_id={frame_id}` | validate_chart.py で使用 |
+| アイテム削除 | DELETE | `/v2/boards/{board_id}/items/{item_id}` | 404 は「削除済み」として正常扱い |
+| コネクタ削除 | DELETE | `/v2/boards/{board_id}/connectors/{connector_id}` | 404 は「削除済み」として正常扱い |
 
 ### 5.2 認証
 
@@ -208,9 +212,9 @@ r"^\[(?P<key>[A-Z0-9_]+)\]\s"
 |---|---|---|---|
 | `start` | `circle` | 50 x 50 | フロー開始点 |
 | `end` | `circle` | 50 x 50 | フロー終了点 |
-| `task` | `rectangle` | 170 x 80 | 一般的なタスク/処理 |
-| `decision` | `rhombus` | 90 x 90 | 判断・分岐 |
-| `chip` | `round_rectangle` | 90 x 26 | 使用システム名タグ |
+| `task` | `rectangle` | 160 x 80 | 一般的なタスク/処理 |
+| `decision` | `rhombus` | 110 x 110 | 判断・分岐（ラベル有効表示幅 ~70px、日本語4文字/行） |
+| `chip` | `round_rectangle` | 130 x 28 | 使用システム名タグ（日本語 ~7文字収容） |
 
 ---
 
@@ -245,12 +249,16 @@ Miro API には「線（line）」の直接作成がないため、細い矩形�
 
 ## 9. エラーハンドリング
 
-| 状況 | 現在の挙動 | 備考 |
+| 状況 | 挙動 | 備考 |
 |---|---|---|
 | 環境変数未設定 | `SystemExit` で即終了 | |
-| Bulk 作成失敗 (status >= 300) | `RuntimeError` を raise | トランザクション全体がロールバック |
-| コネクタ作成失敗 (status >= 300) | `RuntimeError` を raise | |
+| Bulk 作成失敗 (status >= 300) | `@retry` で指数バックオフリトライ（最大3回） | トランザクション全体がロールバック |
+| コネクタ作成失敗 (status >= 300) | `@retry` で指数バックオフリトライ（最大3回） | |
 | ID マッピング失敗 | WARN 出力し、該当コネクタを SKIP | |
+| アイテム削除で 404 | 「削除済み」として正常扱い（即 return） | cleanup 時のハング防止 |
+| コネクタ削除で 404 | 「削除済み」として正常扱い（即 return） | cleanup 時のハング防止 |
+| Frame 不在時の cleanup | Frame 存在チェック → 不在なら即完了 | 全アイテム削除済みの早期終了 |
+| レート制限 (429) | `Retry-After` ヘッダを尊重、なければ指数バックオフ | |
 
 ---
 

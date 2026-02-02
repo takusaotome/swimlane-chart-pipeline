@@ -343,8 +343,8 @@ swimlane-chart/
 │   └── monthly_report_flow.json   ← 既存ハードコードのJSON化
 ├── scripts/swimlane_chart_demo.py  ← ハードコードされたデモスクリプト
 ├── docs/
-│   ├── swimlane-pipeline-design.md
-│   ├── design.md
+│   ├── pipeline-design.md
+│   ├── miro-chart-architecture.md
 │   └── setup-guide.md
 ├── .env
 ├── .gitignore
