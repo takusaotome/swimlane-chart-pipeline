@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chart Plan",
+  "description": "Swimlane chart plan definition",
+  "type": "object",
+  "required": ["title", "lanes", "columns", "nodes", "edges"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0"],
+      "default": "1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "UUID v4 for traceability"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Chart title"
+    },
+    "subtitle": {
+      "type": "string",
+      "description": "Chart subtitle (frequency, scope, etc.)"
+    },
+    "lanes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Swimlane names (departments/roles)"
+    },
+    "columns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Process phase names"
+    },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "lane_height": { "type": "integer", "default": 220 },
+        "col_width": { "type": "integer", "default": 360 },
+        "left_label_width": { "type": "integer", "default": 240 },
+        "header_height": { "type": "integer", "default": 80 },
+        "frame_padding": { "type": "integer", "default": 200 },
+        "task_w": { "type": "integer", "default": 170 },
+        "task_h": { "type": "integer", "default": 80 },
+        "decision_w": { "type": "integer", "default": 90 },
+        "decision_h": { "type": "integer", "default": 90 },
+        "chip_w": { "type": "integer", "default": 90 },
+        "chip_h": { "type": "integer", "default": 26 }
+      },
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "lane", "col"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "description": "Unique node identifier (UPPER_SNAKE_CASE)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label (supports \\n for newlines)"
+          },
+          "lane": {
+            "type": "string",
+            "description": "Must match an entry in 'lanes' array"
+          },
+          "col": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Column index (0-based)"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["start", "end", "task", "decision", "chip"],
+            "default": "task"
+          },
+          "dx": { "type": "integer", "default": 0 },
+          "dy": { "type": "integer", "default": 0 },
+          "w": { "type": "integer", "description": "Override width" },
+          "h": { "type": "integer", "description": "Override height" },
+          "fill": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "stroke": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "stroke_width": { "type": "number" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["src", "dst"],
+        "properties": {
+          "src": {
+            "type": "string",
+            "description": "Source node key"
+          },
+          "dst": {
+            "type": "string",
+            "description": "Destination node key"
+          },
+          "label": {
+            "type": "string",
+            "description": "Edge label (e.g., 'Yes', 'No')"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
+          "dashed": { "type": "boolean", "default": false },
+          "shape": {
+            "type": "string",
+            "enum": ["straight", "elbowed", "curved"],
+            "default": "elbowed"
+          },
+          "end_cap": {
+            "type": "string",
+            "enum": ["none", "stealth"],
+            "default": "stealth"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

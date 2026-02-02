@@ -1,0 +1,232 @@
+{
+  "schema_version": "1.0",
+  "run_id": "",
+  "title": "月次売上報告フロー",
+  "subtitle": "月次（毎月末締め、翌月5営業日目報告）",
+  "lanes": [
+    "各営業拠点",
+    "営業企画部",
+    "経理部",
+    "経営企画部",
+    "経営企画部長"
+  ],
+  "columns": [
+    "毎月末日 17:00",
+    "翌月1日〜2日",
+    "翌月2日〜3日",
+    "翌月4日 午前",
+    "翌月4日 午後",
+    "翌月4日 夕方",
+    "翌月5日 10:00"
+  ],
+  "layout": {
+    "lane_height": 220,
+    "col_width": 360,
+    "left_label_width": 240,
+    "header_height": 80,
+    "frame_padding": 200,
+    "task_w": 170,
+    "task_h": 80,
+    "decision_w": 90,
+    "decision_h": 90,
+    "chip_w": 90,
+    "chip_h": 26
+  },
+  "nodes": [
+    {
+      "key": "START",
+      "label": "開始",
+      "lane": "各営業拠点",
+      "col": 0,
+      "kind": "start",
+      "dx": -230,
+      "dy": 0,
+      "fill": "#BFE9D6"
+    },
+    {
+      "key": "SF_INPUT",
+      "label": "売上データ入力",
+      "lane": "各営業拠点",
+      "col": 0,
+      "kind": "task",
+      "dx": -50,
+      "dy": 0
+    },
+    {
+      "key": "CHIP_SF",
+      "label": "Salesforce",
+      "lane": "各営業拠点",
+      "col": 0,
+      "kind": "chip",
+      "dx": -50,
+      "dy": 70,
+      "fill": "#D9ECFF"
+    },
+    {
+      "key": "SLACK_DONE",
+      "label": "完了報告",
+      "lane": "各営業拠点",
+      "col": 0,
+      "kind": "task",
+      "dx": 150,
+      "dy": 0
+    },
+    {
+      "key": "CHIP_SLACK",
+      "label": "Slack",
+      "lane": "各営業拠点",
+      "col": 0,
+      "kind": "chip",
+      "dx": 150,
+      "dy": 70,
+      "fill": "#D9ECFF"
+    },
+    {
+      "key": "EXCEL_SUM",
+      "label": "データ集計・\n売上資料作成",
+      "lane": "営業企画部",
+      "col": 1,
+      "kind": "task",
+      "dx": 0,
+      "dy": 0
+    },
+    {
+      "key": "CHIP_EXCEL",
+      "label": "Excel",
+      "lane": "営業企画部",
+      "col": 1,
+      "kind": "chip",
+      "dx": 0,
+      "dy": 70,
+      "fill": "#D9ECFF"
+    },
+    {
+      "key": "RECON",
+      "label": "勘定照合",
+      "lane": "経営企画部",
+      "col": 2,
+      "kind": "task",
+      "dx": -60,
+      "dy": 0
+    },
+    {
+      "key": "CHIP_ACCT",
+      "label": "会計システム",
+      "lane": "経営企画部",
+      "col": 2,
+      "kind": "chip",
+      "dx": -60,
+      "dy": 70,
+      "fill": "#D9ECFF"
+    },
+    {
+      "key": "DEC_DIFF",
+      "label": "差異\nある？",
+      "lane": "経営企画部",
+      "col": 2,
+      "kind": "decision",
+      "dx": 140,
+      "dy": 0
+    },
+    {
+      "key": "FIX",
+      "label": "差異確認・修正",
+      "lane": "経理部",
+      "col": 3,
+      "kind": "task",
+      "dx": 40,
+      "dy": 0,
+      "fill": "#F9D7D7"
+    },
+    {
+      "key": "FINAL",
+      "label": "確定完了？",
+      "lane": "経営企画部",
+      "col": 3,
+      "kind": "task",
+      "dx": 0,
+      "dy": 0
+    },
+    {
+      "key": "PPT",
+      "label": "報告書作成",
+      "lane": "経営企画部",
+      "col": 4,
+      "kind": "task",
+      "dx": -20,
+      "dy": 0
+    },
+    {
+      "key": "CHIP_PPT",
+      "label": "PowerPoint",
+      "lane": "経営企画部",
+      "col": 4,
+      "kind": "chip",
+      "dx": -20,
+      "dy": 70,
+      "fill": "#D9ECFF"
+    },
+    {
+      "key": "REVIEW",
+      "label": "レビュー",
+      "lane": "経営企画部長",
+      "col": 5,
+      "kind": "task",
+      "dx": -20,
+      "dy": 0
+    },
+    {
+      "key": "MEETING",
+      "label": "経営会議で報告",
+      "lane": "経営企画部",
+      "col": 6,
+      "kind": "task",
+      "dx": -120,
+      "dy": 0
+    },
+    {
+      "key": "UPLOAD",
+      "label": "SharePointに\nアップロード",
+      "lane": "経営企画部",
+      "col": 6,
+      "kind": "task",
+      "dx": 120,
+      "dy": 0
+    },
+    {
+      "key": "CHIP_SP",
+      "label": "SharePoint",
+      "lane": "経営企画部",
+      "col": 6,
+      "kind": "chip",
+      "dx": 120,
+      "dy": 70,
+      "fill": "#D9ECFF"
+    },
+    {
+      "key": "END",
+      "label": "終了",
+      "lane": "経営企画部",
+      "col": 6,
+      "kind": "end",
+      "dx": 260,
+      "dy": 0,
+      "fill": "#DDDDDD"
+    }
+  ],
+  "edges": [
+    {"src": "START", "dst": "SF_INPUT"},
+    {"src": "SF_INPUT", "dst": "SLACK_DONE"},
+    {"src": "SLACK_DONE", "dst": "EXCEL_SUM"},
+    {"src": "EXCEL_SUM", "dst": "RECON"},
+    {"src": "RECON", "dst": "DEC_DIFF"},
+    {"src": "DEC_DIFF", "dst": "FIX", "label": "Yes", "color": "#2E7D32"},
+    {"src": "DEC_DIFF", "dst": "FINAL", "label": "No", "color": "#C62828"},
+    {"src": "FIX", "dst": "RECON", "dashed": true, "color": "#C62828", "shape": "curved"},
+    {"src": "FINAL", "dst": "PPT"},
+    {"src": "PPT", "dst": "REVIEW"},
+    {"src": "REVIEW", "dst": "MEETING"},
+    {"src": "MEETING", "dst": "UPLOAD"},
+    {"src": "UPLOAD", "dst": "END"}
+  ]
+}
