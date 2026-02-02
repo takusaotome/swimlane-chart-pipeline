@@ -34,13 +34,13 @@
 
 ### 前提条件
 
-- Python 3.9+
+- Python 3.12+
 - Miro アカウント（Free プラン以上）
 
 ### インストール
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install requests python-dotenv
 ```
