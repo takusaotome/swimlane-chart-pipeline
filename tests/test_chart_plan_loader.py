@@ -1,12 +1,11 @@
-"""Tests for src/chart_plan_loader.py — M3 (unused import), m5 (validation gaps)."""
+"""Tests for src/chart_plan_loader.py — M3 (unused import), m5 (validation gaps), C2 (apply_patch)."""
 
 from __future__ import annotations
 
 import ast
+import json
 import sys
 from pathlib import Path
-
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -117,3 +116,82 @@ class TestValidationGaps:
         }
         errors = _validate_raw(raw)
         assert errors == [], f"Valid plan should have no errors, got: {errors}"
+
+
+class TestApplyPatch:
+    """C2: apply_patch should support replace, add, and remove operations."""
+
+    def _write_plan(self, tmp_path, data):
+        p = tmp_path / "chart_plan.json"
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        return str(p)
+
+    def _read_plan(self, path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_replace_nested_value(self, tmp_path):
+        """replace op should update an existing value at the given path."""
+        from src.chart_plan_loader import apply_patch
+
+        data = {"layout": {"col_width": 360}, "nodes": [{"key": "A", "dx": 0}]}
+        path = self._write_plan(tmp_path, data)
+
+        apply_patch(path, [{"op": "replace", "path": "/layout/col_width", "value": 400}])
+        result = self._read_plan(path)
+        assert result["layout"]["col_width"] == 400
+
+    def test_replace_list_element(self, tmp_path):
+        """replace op should work on list elements by index."""
+        from src.chart_plan_loader import apply_patch
+
+        data = {"nodes": [{"key": "A", "dx": 0}, {"key": "B", "dx": 10}]}
+        path = self._write_plan(tmp_path, data)
+
+        apply_patch(path, [{"op": "replace", "path": "/nodes/1/dx", "value": 80}])
+        result = self._read_plan(path)
+        assert result["nodes"][1]["dx"] == 80
+
+    def test_add_new_key(self, tmp_path):
+        """add op should insert a new key into a dict."""
+        from src.chart_plan_loader import apply_patch
+
+        data = {"layout": {"col_width": 360}}
+        path = self._write_plan(tmp_path, data)
+
+        apply_patch(path, [{"op": "add", "path": "/layout/lane_height", "value": 220}])
+        result = self._read_plan(path)
+        assert result["layout"]["lane_height"] == 220
+
+    def test_add_list_element(self, tmp_path):
+        """add op should insert into a list at the given index."""
+        from src.chart_plan_loader import apply_patch
+
+        data = {"nodes": [{"key": "A"}, {"key": "C"}]}
+        path = self._write_plan(tmp_path, data)
+
+        apply_patch(path, [{"op": "add", "path": "/nodes/1", "value": {"key": "B"}}])
+        result = self._read_plan(path)
+        assert [n["key"] for n in result["nodes"]] == ["A", "B", "C"]
+
+    def test_remove_dict_key(self, tmp_path):
+        """remove op should delete a key from a dict."""
+        from src.chart_plan_loader import apply_patch
+
+        data = {"layout": {"col_width": 360, "lane_height": 220}}
+        path = self._write_plan(tmp_path, data)
+
+        apply_patch(path, [{"op": "remove", "path": "/layout/lane_height"}])
+        result = self._read_plan(path)
+        assert "lane_height" not in result["layout"]
+
+    def test_remove_list_element(self, tmp_path):
+        """remove op should delete an element from a list by index."""
+        from src.chart_plan_loader import apply_patch
+
+        data = {"nodes": [{"key": "A"}, {"key": "B"}, {"key": "C"}]}
+        path = self._write_plan(tmp_path, data)
+
+        apply_patch(path, [{"op": "remove", "path": "/nodes/1"}])
+        result = self._read_plan(path)
+        assert [n["key"] for n in result["nodes"]] == ["A", "C"]

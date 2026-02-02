@@ -25,16 +25,15 @@ from typing import Any, Dict, List, Optional, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.swimlane_lib import MiroClient
-
+from src.swimlane_lib import MiroClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Heuristic checks
 # ---------------------------------------------------------------------------
 
 JAPANESE_CHAR_WIDTH_PX = 16  # Approximate width per Japanese character
-LATIN_CHAR_WIDTH_PX = 9      # Approximate width per Latin character
-BG_SIZE_THRESHOLD = 500      # Items larger than this are treated as background
+LATIN_CHAR_WIDTH_PX = 9  # Approximate width per Latin character
+BG_SIZE_THRESHOLD = 500  # Items larger than this are treated as background
 
 
 def estimate_text_width(text: str, font_size: int = 14) -> float:
@@ -65,15 +64,15 @@ def get_bbox(item: Dict) -> Optional[Tuple[float, float, float, float]]:
     return (x - w / 2, y - h / 2, x + w / 2, y + h / 2)
 
 
-def boxes_overlap(a: Tuple[float, float, float, float],
-                  b: Tuple[float, float, float, float],
-                  margin: float = 5.0) -> bool:
+def boxes_overlap(
+    a: Tuple[float, float, float, float], b: Tuple[float, float, float, float], margin: float = 5.0
+) -> bool:
     """Check if two bounding boxes overlap (with margin)."""
     return not (
-        a[2] + margin <= b[0] or  # a is left of b
-        b[2] + margin <= a[0] or  # b is left of a
-        a[3] + margin <= b[1] or  # a is above b
-        b[3] + margin <= a[1]     # b is above a
+        a[2] + margin <= b[0]  # a is left of b
+        or b[2] + margin <= a[0]  # b is left of a
+        or a[3] + margin <= b[1]  # a is above b
+        or b[3] + margin <= a[1]  # b is above a
     )
 
 
@@ -101,15 +100,17 @@ def check_overlaps(items: List[Dict]) -> List[Dict[str, Any]]:
             item_a, bbox_a = shape_items[i]
             item_b, bbox_b = shape_items[j]
             if boxes_overlap(bbox_a, bbox_b):
-                findings.append({
-                    "severity": "Major",
-                    "type": "overlap",
-                    "description": f"Items overlap: {item_a.get('id')} and {item_b.get('id')}",
-                    "item_a_id": item_a.get("id"),
-                    "item_b_id": item_b.get("id"),
-                    "item_a_content": item_a.get("data", {}).get("content", ""),
-                    "item_b_content": item_b.get("data", {}).get("content", ""),
-                })
+                findings.append(
+                    {
+                        "severity": "Major",
+                        "type": "overlap",
+                        "description": f"Items overlap: {item_a.get('id')} and {item_b.get('id')}",
+                        "item_a_id": item_a.get("id"),
+                        "item_b_id": item_b.get("id"),
+                        "item_a_content": item_a.get("data", {}).get("content", ""),
+                        "item_b_content": item_b.get("data", {}).get("content", ""),
+                    }
+                )
 
     return findings
 
@@ -127,7 +128,6 @@ def check_label_truncation(items: List[Dict]) -> List[Dict[str, Any]]:
 
         geom = item.get("geometry", {})
         w = geom.get("width", 0)
-        h = geom.get("height", 0)
         if w > BG_SIZE_THRESHOLD:  # Skip background shapes
             continue
 
@@ -138,22 +138,25 @@ def check_label_truncation(items: List[Dict]) -> List[Dict[str, Any]]:
             text_width = estimate_text_width(line.strip(), font_size)
             padding = 20  # Internal padding
             if text_width > (w - padding):
-                findings.append({
-                    "severity": "Minor",
-                    "type": "label_truncation",
-                    "description": f"Label may be truncated: '{line.strip()}' (est. {text_width:.0f}px > {w-padding}px available)",
-                    "item_id": item.get("id"),
-                    "content": content,
-                    "estimated_width": text_width,
-                    "available_width": w - padding,
-                })
+                findings.append(
+                    {
+                        "severity": "Minor",
+                        "type": "label_truncation",
+                        "description": f"Label may be truncated: '{line.strip()}' (est. {text_width:.0f}px > {w - padding}px available)",
+                        "item_id": item.get("id"),
+                        "content": content,
+                        "estimated_width": text_width,
+                        "available_width": w - padding,
+                    }
+                )
                 break  # One finding per item
 
     return findings
 
 
 def check_connector_completeness(
-    tracked: Dict, api_connectors: List[Dict],
+    tracked: Dict,
+    api_connectors: List[Dict],
 ) -> List[Dict[str, Any]]:
     """Check that all expected connectors were created."""
     findings: List[Dict[str, Any]] = []
@@ -164,15 +167,17 @@ def check_connector_completeness(
 
     missing = expected_ids - actual_ids
     for mid in missing:
-        conn_info = next(
+        conn_info: Dict[str, Any] = next(
             (c for c in expected_connectors if c.get("miro_id") == mid), {}
         )
-        findings.append({
-            "severity": "Critical",
-            "type": "missing_connector",
-            "description": f"Connector missing: {conn_info.get('src', '?')} -> {conn_info.get('dst', '?')} (miro_id: {mid})",
-            "miro_id": mid,
-        })
+        findings.append(
+            {
+                "severity": "Critical",
+                "type": "missing_connector",
+                "description": f"Connector missing: {conn_info.get('src', '?')} -> {conn_info.get('dst', '?')} (miro_id: {mid})",
+                "miro_id": mid,
+            }
+        )
 
     return findings
 
@@ -182,12 +187,10 @@ def check_lane_balance(chart_plan: Dict) -> List[Dict[str, Any]]:
     findings: List[Dict[str, Any]] = []
 
     lanes = chart_plan.get("lanes", [])
-    layout = chart_plan.get("layout", {})
-    lane_height = layout.get("lane_height", 220)
     nodes = chart_plan.get("nodes", [])
 
     # Count nodes per lane (excluding background/text nodes)
-    lane_counts: Dict[str, int] = {l: 0 for l in lanes}
+    lane_counts: Dict[str, int] = {lane: 0 for lane in lanes}
     for node in nodes:
         lane = node.get("lane", "")
         if lane in lane_counts and node.get("kind") not in ("text", "lane_label", "col_label"):
@@ -195,12 +198,14 @@ def check_lane_balance(chart_plan: Dict) -> List[Dict[str, Any]]:
 
     for lane, count in lane_counts.items():
         if count == 0:
-            findings.append({
-                "severity": "Info",
-                "type": "empty_lane",
-                "description": f"Lane '{lane}' has no flow nodes",
-                "lane": lane,
-            })
+            findings.append(
+                {
+                    "severity": "Info",
+                    "type": "empty_lane",
+                    "description": f"Lane '{lane}' has no flow nodes",
+                    "lane": lane,
+                }
+            )
 
     return findings
 
@@ -208,6 +213,7 @@ def check_lane_balance(chart_plan: Dict) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Main validation
 # ---------------------------------------------------------------------------
+
 
 def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dict:
     """Run all validations and return a report."""
@@ -254,7 +260,7 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
         findings.extend(check_lane_balance(chart_plan))
 
     # Summary
-    severity_counts = {}
+    severity_counts: Dict[str, int] = {}
     for f_ in findings:
         sev = f_.get("severity", "Info")
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
@@ -266,9 +272,9 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
         "connector_count": len(run_connectors),
         "findings": findings,
         "summary": severity_counts,
-        "status": "pass" if not any(
-            f_.get("severity") in ("Critical", "Major") for f_ in findings
-        ) else "fail",
+        "status": "pass"
+        if not any(f_.get("severity") in ("Critical", "Major") for f_ in findings)
+        else "fail",
     }
 
     # Write report

@@ -11,7 +11,8 @@ Miro REST API v2 を使って、非構造テキスト（議事録・業務シナ
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install requests python-dotenv
+pip install -e ".[dev]"
+pre-commit install
 ```
 
 `.env` ファイルに `MIRO_TOKEN` と `MIRO_BOARD_ID` を設定する（`.gitignore` 済み）。取得手順は `docs/setup-guide.md` を参照。
@@ -70,3 +71,7 @@ Agents: `process-consultant`（要件レビュー）、`chart-layout-reviewer`�
 ## Development Practices
 
 - コードを書く際は **TDD スキル (`/tdd-developer`)** を使用して実施すること。テスト先行で開発し、Red → Green → Refactor のサイクルを守る。
+- **pre-commit**: `pre-commit run --all-files` で全ファイルチェック。git commit 時に自動実行される。
+  - trailing-whitespace, end-of-file-fixer, check-yaml, check-toml, check-json
+  - ruff (lint + auto-fix) / ruff-format (formatter)
+  - mypy (static type check, src/ と scripts/ 対象)

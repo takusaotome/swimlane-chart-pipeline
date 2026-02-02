@@ -19,7 +19,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.swimlane_lib import MiroClient
+from src.swimlane_lib import MiroClient  # noqa: E402
 
 
 def count_frame_items(api: MiroClient, frame_id: str) -> int:
@@ -55,9 +55,8 @@ def cleanup(miro_items_path: str, force: bool = False) -> None:
     # Verify item count against Miro API
     if frame_id and not force:
         api_count = count_frame_items(api, frame_id)
-        total_tracked = tracked_item_count + tracked_connector_count
         if api_count != tracked_item_count:
-            print(f"WARNING: Frame item count mismatch!")
+            print("WARNING: Frame item count mismatch!")
             print(f"  Tracked: {tracked_item_count} items")
             print(f"  Miro API: {api_count} items in frame")
             if not sys.stdin.isatty():
@@ -74,7 +73,9 @@ def cleanup(miro_items_path: str, force: bool = False) -> None:
     if counts["connectors"] == 0 and counts["items"] == 0 and counts["frame"] == 0:
         print("Nothing to delete — already clean.")
     else:
-        print(f"Deleted: {counts['connectors']} connectors, {counts['items']} items, {counts['frame']} frame(s)")
+        print(
+            f"Deleted: {counts['connectors']} connectors, {counts['items']} items, {counts['frame']} frame(s)"
+        )
     if counts.get("skipped", 0) > 0:
         print(f"Skipped (already gone): {counts['skipped']}")
     print("Cleanup complete.")

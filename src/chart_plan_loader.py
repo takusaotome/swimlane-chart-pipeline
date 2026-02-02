@@ -7,7 +7,6 @@ from typing import Any, Dict, List, NamedTuple, Optional
 
 from src.swimlane_lib import Edge, Layout, Node
 
-
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
 
 
@@ -26,6 +25,7 @@ class ChartPlan(NamedTuple):
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 class ChartPlanValidationError(Exception):
     pass
@@ -78,7 +78,9 @@ def _validate_raw(raw: Dict[str, Any]) -> List[str]:
         col = n.get("col")
         if col is not None and isinstance(columns, list):
             if col < 0 or col >= len(columns):
-                errors.append(f"nodes[{i}] (key={key}): col {col} out of range [0, {len(columns)-1}]")
+                errors.append(
+                    f"nodes[{i}] (key={key}): col {col} out of range [0, {len(columns) - 1}]"
+                )
 
     edges = raw.get("edges", [])
     for i, e in enumerate(edges):
@@ -95,6 +97,7 @@ def _validate_raw(raw: Dict[str, Any]) -> List[str]:
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
+
 
 def _parse_layout(raw_layout: Optional[Dict[str, Any]]) -> Layout:
     """Parse layout dict into Layout dataclass, falling back to defaults."""
@@ -149,6 +152,7 @@ def load_chart_plan(json_path: str) -> ChartPlan:
 # ---------------------------------------------------------------------------
 # JSON Patch application
 # ---------------------------------------------------------------------------
+
 
 def apply_patch(chart_plan_path: str, patches: List[Dict[str, Any]]) -> None:
     """Apply JSON Patch-style operations to chart_plan.json.

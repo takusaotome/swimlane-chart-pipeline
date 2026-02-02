@@ -341,7 +341,7 @@ swimlane-chart/
 │       └── validation_report.json
 ├── examples/
 │   └── monthly_report_flow.json   ← 既存ハードコードのJSON化
-├── swimlane_chart.py              ← 後方互換で維持
+├── scripts/swimlane_chart_demo.py  ← ハードコードされたデモスクリプト
 ├── docs/
 │   ├── swimlane-pipeline-design.md
 │   ├── design.md
@@ -618,8 +618,8 @@ model: opus
 ### Phase 1 検証
 
 ```bash
-# 後方互換確認
-python swimlane_chart.py
+# デモスクリプト実行
+python scripts/swimlane_chart_demo.py
 # JSON版で同一結果
 python scripts/generate_chart.py examples/monthly_report_flow.json
 ```

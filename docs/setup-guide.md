@@ -3,7 +3,7 @@
 ## 前提条件
 
 - Miro アカウント（Free プラン以上）
-- Python 3.9 以上
+- Python 3.12 以上
 - インターネット接続
 
 ---
@@ -248,7 +248,7 @@ Miro ボードを開いて、緑色の矩形「Hello Miro API」が表示され�
 
 ### 8.1 スクリプトに dotenv を組み込む（必要に応じて）
 
-現在の `swimlane_chart.py` は `os.environ` から直接読み取る設計のため、実行前に環境変数をエクスポートするか、スクリプトの冒頭に以下を追加する:
+現在の `scripts/swimlane_chart_demo.py` は `os.environ` から直接読み取る設計のため、実行前に環境変数をエクスポートするか、スクリプトの冒頭に以下を追加する:
 
 ```python
 from dotenv import load_dotenv
@@ -259,10 +259,10 @@ load_dotenv()
 
 ```bash
 # 方法 A: .env を使う場合（スクリプトに dotenv を組み込み済み）
-python3 swimlane_chart.py
+python3 scripts/swimlane_chart_demo.py
 
 # 方法 B: 環境変数を直接指定する場合
-MIRO_TOKEN="xxxxx" MIRO_BOARD_ID="yyyyy" python3 swimlane_chart.py
+MIRO_TOKEN="xxxxx" MIRO_BOARD_ID="yyyyy" python3 scripts/swimlane_chart_demo.py
 ```
 
 ### 8.3 期待される出力

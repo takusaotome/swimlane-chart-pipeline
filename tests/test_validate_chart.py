@@ -7,8 +7,6 @@ import inspect
 import sys
 from pathlib import Path
 
-import pytest
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -76,12 +74,7 @@ class TestCheckLaneBalanceFunctionality:
                 # Lane B has no nodes
             ],
         }
-        # After M4 fix, should accept chart_plan as first arg
-        try:
-            findings = check_lane_balance(chart_plan)
-        except TypeError:
-            # Before fix, it requires (items, chart_plan) signature
-            findings = check_lane_balance([], chart_plan)
+        findings = check_lane_balance(chart_plan)
 
         empty_findings = [f for f in findings if f["type"] == "empty_lane"]
         assert len(empty_findings) == 1

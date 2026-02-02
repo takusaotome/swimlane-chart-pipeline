@@ -15,5 +15,10 @@ __pycache__/
 .vscode/
 *.swp
 
+# Test / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
 # Pipeline output
 output/

@@ -22,13 +22,13 @@
 
 ## 現在のステータス
 
-**Phase 1（基盤整備）実装中**
+**Phase 1〜4 実装済み / Phase 5 統合テスト段階**
 
-- [x] Miro API 経由のスイムレーンチャート生成スクリプト (`swimlane_chart.py`)
-- [ ] コアライブラリ抽出 (`src/swimlane_lib.py`)
-- [ ] JSON ローダー (`src/chart_plan_loader.py`)
-- [ ] CLI ラッパー (`scripts/generate_chart.py`)
-- [ ] サンプル JSON 化 (`examples/monthly_report_flow.json`)
+- [x] Miro API 経由のスイムレーンチャート生成スクリプト (`scripts/swimlane_chart_demo.py`)
+- [x] コアライブラリ抽出 (`src/swimlane_lib.py`)
+- [x] JSON ローダー (`src/chart_plan_loader.py`)
+- [x] CLI ラッパー (`scripts/generate_chart.py`)
+- [x] サンプル JSON 化 (`examples/monthly_report_flow.json`)
 
 ## セットアップ
 
@@ -42,7 +42,7 @@
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install requests python-dotenv
+pip install -r requirements.txt
 ```
 
 ### Miro API トークンの取得
@@ -66,25 +66,21 @@ MIRO_BOARD_ID=your_board_id_here
 
 ## 使い方
 
-### 現在: スクリプト直接実行
+### デモスクリプト（ハードコードされた月次売上報告フロー）
 
 ```bash
-python swimlane_chart.py
+python scripts/swimlane_chart_demo.py
 ```
 
-出力例:
-
-```
-Created 26 background/text items.
-Created 19 flow nodes. Mapped 19 IDs.
-Created 13 connectors.
-Done. Swimlane reproduced.
-```
-
-### 将来: パイプラインコマンド
+### JSON からチャート生成
 
 ```bash
-# Claude Code 上で実行
+python scripts/generate_chart.py <chart_plan.json> [--run-id <uuid>]
+```
+
+### パイプラインコマンド（Claude Code 上で実行）
+
+```bash
 /swimlane-pipeline
 ```
 
@@ -95,41 +91,46 @@ Done. Swimlane reproduced.
 ```
 swimlane-chart/
 ├── .claude/
-│   ├── skills/                    ← Skill 定義（実装予定）
+│   ├── skills/                    ← Skill 定義
 │   │   ├── process-analyzer/      業務プロセス分析
 │   │   ├── requirements-reviewer/ 要件レビューループ
 │   │   ├── chart-planner/         要件 → JSON 構造化
 │   │   ├── chart-generator/       JSON → Miro API
 │   │   └── swimlane-pipeline/     全ステップ統合実行
-│   └── agents/                    ← Agent 定義（実装予定）
+│   └── agents/                    ← Agent 定義
 │       ├── process-consultant.md
 │       ├── chart-layout-reviewer.md
 │       └── process-analyst.md
-├── src/                           ← コアライブラリ（実装予定）
+├── src/                           ← コアライブラリ
 │   ├── swimlane_lib.py            座標計算・API クライアント
 │   └── chart_plan_loader.py       JSON → dataclass 変換
-├── scripts/                       ← CLI ツール（実装予定）
+├── scripts/                       ← CLI ツール
 │   ├── generate_chart.py          JSON → Miro チャート生成
 │   ├── cleanup_chart.py           生成済みアイテム一括削除
 │   ├── validate_chart.py          Miro API 読戻し＋検証
-│   └── readback_board.py          ボード状態の構造化 JSON 出力
-├── examples/                      ← サンプルデータ（実装予定）
+│   └── swimlane_chart_demo.py     ハードコードされたデモスクリプト
+├── tests/                         ← テストスイート
+│   ├── conftest.py                共通フィクスチャ
+│   ├── test_generate_chart.py
+│   ├── test_validate_chart.py
+│   └── test_chart_plan_loader.py
+├── examples/                      ← サンプルデータ
 │   └── monthly_report_flow.json
 ├── output/                        ← 実行時生成物（.gitignore 対象）
 ├── docs/
 │   ├── design.md                  スクリプト設計書
 │   ├── setup-guide.md             セットアップ手順書
 │   └── swimlane-pipeline-design.md パイプライン設計書
-├── swimlane_chart.py              現行スクリプト（後方互換で維持）
+├── requirements.txt               依存パッケージ
 ├── .env                           環境変数（.gitignore 対象）
 └── .gitignore
 ```
 
 ## カスタマイズ
 
-### フローの変更（現行スクリプト）
+### フローの変更（デモスクリプト）
 
-`swimlane_chart.py` 内の以下の定数を編集する:
+`scripts/swimlane_chart_demo.py` 内の以下の定数を編集する:
 
 | 定数 | 説明 |
 |---|---|
@@ -138,7 +139,7 @@ swimlane-chart/
 | `NODES` | ノード定義。`key`, `label`, `lane`, `col`, `kind` 等を指定 |
 | `EDGES` | コネクタ定義。`src` と `dst` にノードの `key` を指定 |
 
-### フローの変更（将来: JSON 入力）
+### フローの変更（JSON 入力）
 
 `chart_plan.json` を作成して `scripts/generate_chart.py` に渡す:
 
@@ -189,11 +190,11 @@ Layout(
 
 | Phase | 内容 | ステータス |
 |---|---|---|
-| 1 | 基盤整備: コアライブラリ抽出、JSON ローダー、CLI ラッパー | 実装中 |
-| 2 | ユーティリティ: cleanup / readback / validate スクリプト | 未着手 |
-| 3 | Agent 定義: process-consultant / chart-layout-reviewer / process-analyst | 未着手 |
-| 4 | Skill 作成: chart-generator → chart-planner → requirements-reviewer → process-analyzer | 未着手 |
-| 5 | 統合: swimlane-pipeline マスターオーケストレーター + E2E テスト | 未着手 |
+| 1 | 基盤整備: コアライブラリ抽出、JSON ローダー、CLI ラッパー | 実装済み |
+| 2 | ユーティリティ: cleanup / validate スクリプト | 実装済み |
+| 3 | Agent 定義: process-consultant / chart-layout-reviewer / process-analyst | 実装済み |
+| 4 | Skill 作成: chart-generator → chart-planner → requirements-reviewer → process-analyzer | 実装済み |
+| 5 | 統合: swimlane-pipeline マスターオーケストレーター + E2E テスト | 進行中 |
 
 ## ドキュメント
 

@@ -6,7 +6,7 @@ import io
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -55,7 +55,6 @@ class TestNonTTYSafety:
         monkeypatch.setattr("sys.stdin", fake_stdin)
 
         input_called = False
-        original_input = __builtins__["input"] if isinstance(__builtins__, dict) else __builtins__.input
 
         def trap_input(prompt=""):
             nonlocal input_called

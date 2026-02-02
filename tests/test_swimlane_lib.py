@@ -4,12 +4,8 @@ from __future__ import annotations
 
 import ast
 import json
-import os
 import sys
-import threading
 from pathlib import Path
-
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -20,7 +16,6 @@ class TestFlushMiroItemsAtomic:
 
     def test_flush_uses_atomic_write(self, tmp_path):
         """Confirm flush_miro_items uses tempfile approach (not direct open-write)."""
-        from src.swimlane_lib import flush_miro_items
 
         source_path = PROJECT_ROOT / "src" / "swimlane_lib.py"
         source = source_path.read_text()

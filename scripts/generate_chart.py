@@ -11,7 +11,6 @@ inside it. Flushes miro_items.json after each successful batch.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import uuid
 from pathlib import Path
@@ -21,9 +20,10 @@ from typing import Dict, List
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from dataclasses import replace
+from dataclasses import replace  # noqa: E402
 
-from src.swimlane_lib import (
+from src.chart_plan_loader import load_chart_plan  # noqa: E402
+from src.swimlane_lib import (  # noqa: E402
     MiroClient,
     build_background_items,
     build_node_items,
@@ -34,8 +34,6 @@ from src.swimlane_lib import (
     swimlane_total_height,
     swimlane_total_width,
 )
-from src.chart_plan_loader import load_chart_plan
-
 
 FRAME_GAP = 500  # Gap between existing content and new frame
 
@@ -52,6 +50,7 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
 
     # Initialize Miro client
     api = MiroClient()
+    assert api.board_id, "MIRO_BOARD_ID is required"
 
     # Calculate chart dimensions
     num_lanes = len(plan.lanes)
@@ -70,8 +69,10 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     print(f"Creating frame: {frame_title}")
     frame_resp = api.create_frame(
         title=frame_title,
-        x=frame_x, y=frame_y,
-        w=chart_w, h=chart_h,
+        x=frame_x,
+        y=frame_y,
+        w=chart_w,
+        h=chart_h,
     )
     frame_id = str(frame_resp.get("id", ""))
     print(f"Frame created: {frame_id}")
@@ -85,12 +86,13 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     tracked_items: List[Dict] = []
     tracked_connectors: List[Dict] = []
     batch_num = 0
+    board_id: str = api.board_id  # validated non-empty by MiroClient.__init__
 
     def flush() -> None:
         flush_miro_items(
             path=miro_items_path,
             run_id=run_id,
-            board_id=api.board_id,
+            board_id=board_id,
             frame_id=frame_id,
             items=tracked_items,
             connectors=tracked_connectors,
@@ -108,7 +110,11 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     # 1) Build and create background items
     bg_items = build_background_items(adjusted_cfg, plan.lanes, plan.columns)
     txt_items = build_text_items(
-        adjusted_cfg, plan.lanes, plan.columns, plan.title, plan.subtitle,
+        adjusted_cfg,
+        plan.lanes,
+        plan.columns,
+        plan.title,
+        plan.subtitle,
     )
     non_flow_items = bg_items + txt_items
 
@@ -117,18 +123,23 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
         created = api.bulk_create(inject_parent(batch))
         for item in created:
             item_id = str(item.get("id", ""))
-            tracked_items.append({
-                "key": "_bg",
-                "miro_id": item_id,
-                "type": item.get("type", "shape"),
-                "batch": batch_num,
-            })
+            tracked_items.append(
+                {
+                    "key": "_bg",
+                    "miro_id": item_id,
+                    "type": item.get("type", "shape"),
+                    "batch": batch_num,
+                }
+            )
         flush()
     print(f"Created {len(non_flow_items)} background/text items.")
 
     # 2) Build and create flow nodes
     node_keys, node_items = build_node_items(
-        adjusted_cfg, plan.nodes, plan.lanes, num_columns,
+        adjusted_cfg,
+        plan.nodes,
+        plan.lanes,
+        num_columns,
     )
     key_to_id: Dict[str, str] = {}
     offset = 0
@@ -141,12 +152,14 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
             idx = offset + i
             if item_id and idx < len(node_keys):
                 key_to_id[node_keys[idx]] = item_id
-                tracked_items.append({
-                    "key": node_keys[idx],
-                    "miro_id": item_id,
-                    "type": item.get("type", "shape"),
-                    "batch": batch_num,
-                })
+                tracked_items.append(
+                    {
+                        "key": node_keys[idx],
+                        "miro_id": item_id,
+                        "type": item.get("type", "shape"),
+                        "batch": batch_num,
+                    }
+                )
         offset += len(batch)
         flush()
     print(f"Created {len(node_items)} flow nodes. Mapped {len(key_to_id)} IDs.")
@@ -165,11 +178,13 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
         body = connector_payload(e, start_id=key_to_id[e.src], end_id=key_to_id[e.dst])
         resp = api.create_connector(body)
         conn_id = str(resp.get("id", ""))
-        tracked_connectors.append({
-            "src": e.src,
-            "dst": e.dst,
-            "miro_id": conn_id,
-        })
+        tracked_connectors.append(
+            {
+                "src": e.src,
+                "dst": e.dst,
+                "miro_id": conn_id,
+            }
+        )
         created_connectors += 1
         flush()
 
@@ -179,14 +194,14 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     flush_miro_items(
         path=miro_items_path,
         run_id=run_id,
-        board_id=api.board_id,
+        board_id=board_id,
         frame_id=frame_id,
         items=tracked_items,
         connectors=tracked_connectors,
         status="completed",
     )
 
-    board_url = f"https://miro.com/app/board/{api.board_id}/"
+    board_url = f"https://miro.com/app/board/{board_id}/"
     print(f"Done. Board URL: {board_url}")
     return board_url
 

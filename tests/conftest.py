@@ -6,7 +6,6 @@ import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
-from typing import Dict, List
 
 import pytest
 
@@ -29,8 +28,7 @@ def mock_miro(monkeypatch):
     mock.find_rightmost_frame.return_value = (0, 0)
     mock.create_frame.return_value = {"id": "frame-001"}
     mock.bulk_create.side_effect = lambda items: [
-        {"id": f"item-{i}", "type": it.get("type", "shape")}
-        for i, it in enumerate(items)
+        {"id": f"item-{i}", "type": it.get("type", "shape")} for i, it in enumerate(items)
     ]
     mock.create_connector.return_value = {"id": "conn-001"}
     mock.attach_to_frame.return_value = None

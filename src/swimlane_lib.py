@@ -6,11 +6,11 @@ and API client with retry logic for generating swimlane charts on Miro.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import time
-import functools
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
@@ -31,7 +31,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 # Retry decorator with exponential backoff
 # ---------------------------------------------------------------------------
 
-def retry(max_attempts: int = 3, backoff_schedule: Optional[List[float]] = None) -> Callable[[F], F]:
+
+def retry(
+    max_attempts: int = 3, backoff_schedule: Optional[List[float]] = None
+) -> Callable[[F], F]:
     """Decorator: retry on failure with exponential backoff.
 
     Respects Retry-After header on 429 responses.
@@ -51,7 +54,11 @@ def retry(max_attempts: int = 3, backoff_schedule: Optional[List[float]] = None)
                     resp = exc.response
                     if resp is not None and resp.status_code == 429:
                         retry_after = resp.headers.get("Retry-After")
-                        wait = float(retry_after) if retry_after else backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
+                        wait = (
+                            float(retry_after)
+                            if retry_after
+                            else backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
+                        )
                     else:
                         wait = backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
                     if attempt < max_attempts - 1:
@@ -62,13 +69,16 @@ def retry(max_attempts: int = 3, backoff_schedule: Optional[List[float]] = None)
                     if attempt < max_attempts - 1:
                         time.sleep(wait)
             raise last_exc  # type: ignore[misc]
+
         return wrapper  # type: ignore[return-value]
+
     return decorator
 
 
 # ---------------------------------------------------------------------------
 # Layout dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Layout:
@@ -101,13 +111,14 @@ class Layout:
 # Node / Edge dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Node:
     key: str
     label: str
     lane: str
     col: int
-    kind: str = "task"           # task|decision|start|end|chip|lane_band|line|text
+    kind: str = "task"  # task|decision|start|end|chip|lane_band|line|text
     dx: int = 0
     dy: int = 0
     w: Optional[int] = None
@@ -124,13 +135,14 @@ class Edge:
     label: str = ""
     color: Optional[str] = None
     dashed: bool = False
-    shape: str = "elbowed"       # straight|elbowed|curved etc.
-    end_cap: str = "stealth"     # none|stealth etc.
+    shape: str = "elbowed"  # straight|elbowed|curved etc.
+    end_cap: str = "stealth"  # none|stealth etc.
 
 
 # ---------------------------------------------------------------------------
 # Coordinate helpers
 # ---------------------------------------------------------------------------
+
 
 def swimlane_total_height(cfg: Layout, num_lanes: int) -> int:
     return num_lanes * cfg.lane_height + (num_lanes - 1) * cfg.lane_gap + cfg.header_height
@@ -159,7 +171,10 @@ def col_center_x(cfg: Layout, col_i: int, num_lanes: int, num_columns: int) -> i
 
 
 def node_xy(
-    cfg: Layout, node: Node, lanes: List[str], num_columns: int,
+    cfg: Layout,
+    node: Node,
+    lanes: List[str],
+    num_columns: int,
 ) -> Tuple[int, int]:
     lane_i = lanes.index(node.lane)
     num_lanes = len(lanes)
@@ -171,6 +186,7 @@ def node_xy(
 # ---------------------------------------------------------------------------
 # Miro payload builders
 # ---------------------------------------------------------------------------
+
 
 def shape_payload(
     content: str,
@@ -244,6 +260,7 @@ def connector_payload(edge: Edge, start_id: str, end_id: str) -> Dict:
 # Background and text layer builders (parameterized)
 # ---------------------------------------------------------------------------
 
+
 def build_background_items(
     cfg: Layout,
     lanes: List[str],
@@ -261,38 +278,63 @@ def build_background_items(
     frame_cx = cfg.origin_x + cfg.frame_padding // 2
 
     # Outer frame
-    items.append(shape_payload(
-        content="", x=frame_cx, y=cfg.origin_y,
-        w=frame_w, h=h,
-        shape="rectangle",
-        fill="#FFFFFF", stroke="#CFCFCF", stroke_width=3.0,
-    ))
+    items.append(
+        shape_payload(
+            content="",
+            x=frame_cx,
+            y=cfg.origin_y,
+            w=frame_w,
+            h=h,
+            shape="rectangle",
+            fill="#FFFFFF",
+            stroke="#CFCFCF",
+            stroke_width=3.0,
+        )
+    )
 
     # Lane divider lines (horizontal)
     for i in range(1, num_lanes):
         y = tly + cfg.header_height + i * cfg.lane_height
-        items.append(shape_payload(
-            content="", x=frame_cx, y=y,
-            w=frame_w, h=cfg.divider_thickness,
-            shape="rectangle", fill="#E5E5E5",
-        ))
+        items.append(
+            shape_payload(
+                content="",
+                x=frame_cx,
+                y=y,
+                w=frame_w,
+                h=cfg.divider_thickness,
+                shape="rectangle",
+                fill="#E5E5E5",
+            )
+        )
 
     # Column gridlines (vertical)
     for i in range(1, num_columns):
         x = tlx + cfg.left_label_width + i * cfg.col_width
-        items.append(shape_payload(
-            content="", x=x, y=cfg.origin_y,
-            w=cfg.gridline_thickness, h=h,
-            shape="rectangle", fill="#E5E5E5",
-        ))
+        items.append(
+            shape_payload(
+                content="",
+                x=x,
+                y=cfg.origin_y,
+                w=cfg.gridline_thickness,
+                h=h,
+                shape="rectangle",
+                fill="#E5E5E5",
+            )
+        )
 
     # Header separator
     header_sep_y = tly + cfg.header_height
-    items.append(shape_payload(
-        content="", x=frame_cx, y=header_sep_y,
-        w=frame_w, h=cfg.divider_thickness,
-        shape="rectangle", fill="#E5E5E5",
-    ))
+    items.append(
+        shape_payload(
+            content="",
+            x=frame_cx,
+            y=header_sep_y,
+            w=frame_w,
+            h=cfg.divider_thickness,
+            shape="rectangle",
+            fill="#E5E5E5",
+        )
+    )
 
     return items
 
@@ -314,33 +356,37 @@ def build_text_items(
     # Title / subtitle
     title_x = tlx + w // 2
     title_y = tly - 80
-    items.append({
-        "type": "shape",
-        "data": {"shape": "rectangle", "content": title},
-        "position": {"x": title_x, "y": title_y},
-        "geometry": {"width": 600, "height": 50},
-        "style": {
-            "fillOpacity": 0.0,
-            "borderOpacity": 0.0,
-            "fontSize": 28,
-            "textAlign": "left",
-            "fontFamily": "arial",
-        },
-    })
-    items.append({
-        "type": "shape",
-        "data": {"shape": "rectangle", "content": subtitle},
-        "position": {"x": title_x, "y": title_y + 46},
-        "geometry": {"width": 600, "height": 36},
-        "style": {
-            "fillOpacity": 0.0,
-            "borderOpacity": 0.0,
-            "fontSize": 16,
-            "textAlign": "left",
-            "fontFamily": "arial",
-            "color": "#666666",
-        },
-    })
+    items.append(
+        {
+            "type": "shape",
+            "data": {"shape": "rectangle", "content": title},
+            "position": {"x": title_x, "y": title_y},
+            "geometry": {"width": 600, "height": 50},
+            "style": {
+                "fillOpacity": 0.0,
+                "borderOpacity": 0.0,
+                "fontSize": 28,
+                "textAlign": "left",
+                "fontFamily": "arial",
+            },
+        }
+    )
+    items.append(
+        {
+            "type": "shape",
+            "data": {"shape": "rectangle", "content": subtitle},
+            "position": {"x": title_x, "y": title_y + 46},
+            "geometry": {"width": 600, "height": 36},
+            "style": {
+                "fillOpacity": 0.0,
+                "borderOpacity": 0.0,
+                "fontSize": 16,
+                "textAlign": "left",
+                "fontFamily": "arial",
+                "color": "#666666",
+            },
+        }
+    )
 
     # Column labels
     header_y = tly + cfg.header_height // 2
@@ -373,43 +419,75 @@ def build_node_items(
 
         x, y = node_xy(cfg, n, lanes, num_columns)
         if n.kind == "start":
-            items.append(shape_payload(
-                content=n.label, x=x, y=y,
-                w=50, h=50, shape="circle",
-                fill=n.fill or "#BFE9D6",
-                stroke="#1a1a1a", stroke_width=2.0,
-            ))
+            items.append(
+                shape_payload(
+                    content=n.label,
+                    x=x,
+                    y=y,
+                    w=50,
+                    h=50,
+                    shape="circle",
+                    fill=n.fill or "#BFE9D6",
+                    stroke="#1a1a1a",
+                    stroke_width=2.0,
+                )
+            )
         elif n.kind == "end":
-            items.append(shape_payload(
-                content=n.label, x=x, y=y,
-                w=50, h=50, shape="circle",
-                fill=n.fill or "#DDDDDD",
-                stroke="#1a1a1a", stroke_width=2.0,
-            ))
+            items.append(
+                shape_payload(
+                    content=n.label,
+                    x=x,
+                    y=y,
+                    w=50,
+                    h=50,
+                    shape="circle",
+                    fill=n.fill or "#DDDDDD",
+                    stroke="#1a1a1a",
+                    stroke_width=2.0,
+                )
+            )
         elif n.kind == "decision":
-            items.append(shape_payload(
-                content=n.label, x=x, y=y,
-                w=n.w or cfg.decision_w, h=n.h or cfg.decision_h,
-                shape="rhombus",
-                fill=n.fill or "#FFF3CD",
-                stroke="#1a1a1a", stroke_width=2.0,
-            ))
+            items.append(
+                shape_payload(
+                    content=n.label,
+                    x=x,
+                    y=y,
+                    w=n.w or cfg.decision_w,
+                    h=n.h or cfg.decision_h,
+                    shape="rhombus",
+                    fill=n.fill or "#FFF3CD",
+                    stroke="#1a1a1a",
+                    stroke_width=2.0,
+                )
+            )
         elif n.kind == "chip":
-            items.append(shape_payload(
-                content=n.label, x=x, y=y,
-                w=n.w or cfg.chip_w, h=n.h or cfg.chip_h,
-                shape="round_rectangle",
-                fill=n.fill or "#D9ECFF",
-                stroke="#7AA7D9", stroke_width=1.5,
-            ))
+            items.append(
+                shape_payload(
+                    content=n.label,
+                    x=x,
+                    y=y,
+                    w=n.w or cfg.chip_w,
+                    h=n.h or cfg.chip_h,
+                    shape="round_rectangle",
+                    fill=n.fill or "#D9ECFF",
+                    stroke="#7AA7D9",
+                    stroke_width=1.5,
+                )
+            )
         else:  # task (default)
-            items.append(shape_payload(
-                content=n.label, x=x, y=y,
-                w=n.w or cfg.task_w, h=n.h or cfg.task_h,
-                shape="rectangle",
-                fill=n.fill or "#FFFFFF",
-                stroke="#1a1a1a", stroke_width=2.0,
-            ))
+            items.append(
+                shape_payload(
+                    content=n.label,
+                    x=x,
+                    y=y,
+                    w=n.w or cfg.task_w,
+                    h=n.h or cfg.task_h,
+                    shape="rectangle",
+                    fill=n.fill or "#FFFFFF",
+                    stroke="#1a1a1a",
+                    stroke_width=2.0,
+                )
+            )
         keys.append(n.key)
 
     return keys, items
@@ -419,6 +497,7 @@ def build_node_items(
 # Utility
 # ---------------------------------------------------------------------------
 
+
 def chunked(xs: List, n: int = 20) -> Iterable[List]:
     for i in range(0, len(xs), n):
         yield xs[i : i + n]
@@ -427,6 +506,7 @@ def chunked(xs: List, n: int = 20) -> Iterable[List]:
 # ---------------------------------------------------------------------------
 # Miro API Client
 # ---------------------------------------------------------------------------
+
 
 class MiroClient:
     """Miro REST API client with retry and Frame support."""
@@ -457,7 +537,8 @@ class MiroClient:
     def _raise_for_status(self, resp: requests.Response) -> None:
         if resp.status_code >= 300:
             exc = requests.exceptions.HTTPError(
-                f"{resp.status_code} {resp.text}", response=resp,
+                f"{resp.status_code} {resp.text}",
+                response=resp,
             )
             raise exc
 
@@ -468,8 +549,10 @@ class MiroClient:
         """Bulk create up to 20 items per call (transactional)."""
         url = f"{self.base}/boards/{self.board_id}/items/bulk"
         resp = requests.post(
-            url, headers=self._headers(),
-            data=json.dumps(items), timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            data=json.dumps(items),
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         data = resp.json()
@@ -487,8 +570,10 @@ class MiroClient:
     def create_connector(self, body: Dict) -> Dict:
         url = f"{self.base}/boards/{self.board_id}/connectors"
         resp = requests.post(
-            url, headers=self._headers(),
-            data=json.dumps(body), timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            data=json.dumps(body),
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         return resp.json()
@@ -509,8 +594,10 @@ class MiroClient:
 
         payload = {k: v for k, v in item.items() if k != "type"}
         resp = requests.post(
-            url, headers=self._headers(),
-            data=json.dumps(payload), timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            data=json.dumps(payload),
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         return resp.json()
@@ -549,8 +636,10 @@ class MiroClient:
         if cursor:
             params["cursor"] = cursor
         resp = requests.get(
-            url, headers=self._headers(),
-            params=params, timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            params=params,
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         return resp.json()
@@ -563,8 +652,10 @@ class MiroClient:
         if cursor:
             params["cursor"] = cursor
         resp = requests.get(
-            url, headers=self._headers(),
-            params=params, timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            params=params,
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         return resp.json()
@@ -589,8 +680,10 @@ class MiroClient:
             "style": {"fillColor": "#FFFFFF"},
         }
         resp = requests.post(
-            url, headers=self._headers(),
-            data=json.dumps(payload), timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            data=json.dumps(payload),
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         return resp.json()
@@ -603,8 +696,10 @@ class MiroClient:
         if cursor:
             params["cursor"] = cursor
         resp = requests.get(
-            url, headers=self._headers(),
-            params=params, timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            params=params,
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
         return resp.json()
@@ -620,8 +715,10 @@ class MiroClient:
         url = f"{self.base}/boards/{self.board_id}/items/{item_id}"
         payload = {"parent": {"id": frame_id}}
         resp = requests.patch(
-            url, headers=self._headers(),
-            data=json.dumps(payload), timeout=self.timeout,
+            url,
+            headers=self._headers(),
+            data=json.dumps(payload),
+            timeout=self.timeout,
         )
         self._raise_for_status(resp)
 
@@ -740,6 +837,7 @@ class MiroClient:
 # miro_items.json flush helper
 # ---------------------------------------------------------------------------
 
+
 def flush_miro_items(
     path: str,
     run_id: str,
@@ -751,7 +849,7 @@ def flush_miro_items(
 ) -> None:
     """Write/update miro_items.json atomically via tempfile + os.replace."""
     import tempfile
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     jst = timezone(timedelta(hours=9))
     data = {

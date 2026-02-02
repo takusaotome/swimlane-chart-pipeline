@@ -8,7 +8,6 @@ For JSON-driven generation, use: python scripts/generate_chart.py <chart_plan.js
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Dict, List
@@ -17,7 +16,7 @@ from typing import Dict, List
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.swimlane_lib import (
+from src.swimlane_lib import (  # noqa: E402
     Edge,
     Layout,
     MiroClient,
@@ -28,7 +27,6 @@ from src.swimlane_lib import (
     chunked,
     connector_payload,
 )
-
 
 # =========================
 # 1) CONFIG: lanes + timeline
@@ -71,48 +69,74 @@ NODES: List[Node] = [
     # Flow nodes (shapes)
     Node("START", "開始", lane="各営業拠点", col=0, kind="start", dx=-230, fill="#BFE9D6"),
     Node("SF_INPUT", "売上データ入力", lane="各営業拠点", col=0, kind="task", dx=-50),
-    Node("CHIP_SF", "Salesforce", lane="各営業拠点", col=0, kind="chip", dx=-50, dy=70, fill="#D9ECFF"),
-
+    Node(
+        "CHIP_SF",
+        "Salesforce",
+        lane="各営業拠点",
+        col=0,
+        kind="chip",
+        dx=-50,
+        dy=70,
+        fill="#D9ECFF",
+    ),
     Node("SLACK_DONE", "完了報告", lane="各営業拠点", col=0, kind="task", dx=150),
-    Node("CHIP_SLACK", "Slack", lane="各営業拠点", col=0, kind="chip", dx=150, dy=70, fill="#D9ECFF"),
-
+    Node(
+        "CHIP_SLACK", "Slack", lane="各営業拠点", col=0, kind="chip", dx=150, dy=70, fill="#D9ECFF"
+    ),
     Node("EXCEL_SUM", "データ集計・\n売上資料作成", lane="営業企画部", col=1, kind="task"),
     Node("CHIP_EXCEL", "Excel", lane="営業企画部", col=1, kind="chip", dy=70, fill="#D9ECFF"),
-
     Node("RECON", "勘定照合", lane="経営企画部", col=2, kind="task", dx=-60),
-    Node("CHIP_ACCT", "会計システム", lane="経営企画部", col=2, kind="chip", dx=-60, dy=70, fill="#D9ECFF"),
-
+    Node(
+        "CHIP_ACCT",
+        "会計システム",
+        lane="経営企画部",
+        col=2,
+        kind="chip",
+        dx=-60,
+        dy=70,
+        fill="#D9ECFF",
+    ),
     Node("DEC_DIFF", "差異\nある？", lane="経営企画部", col=2, kind="decision", dx=140),
-
     Node("FIX", "差異確認・修正", lane="経理部", col=3, kind="task", dx=40, fill="#F9D7D7"),
     Node("FINAL", "確定完了？", lane="経営企画部", col=3, kind="task", dx=0),
-
     Node("PPT", "報告書作成", lane="経営企画部", col=4, kind="task", dx=-20),
-    Node("CHIP_PPT", "PowerPoint", lane="経営企画部", col=4, kind="chip", dx=-20, dy=70, fill="#D9ECFF"),
-
+    Node(
+        "CHIP_PPT",
+        "PowerPoint",
+        lane="経営企画部",
+        col=4,
+        kind="chip",
+        dx=-20,
+        dy=70,
+        fill="#D9ECFF",
+    ),
     Node("REVIEW", "レビュー", lane="経営企画部長", col=5, kind="task", dx=-20),
-
     Node("MEETING", "経営会議で報告", lane="経営企画部", col=6, kind="task", dx=-120),
     Node("UPLOAD", "SharePointに\nアップロード", lane="経営企画部", col=6, kind="task", dx=120),
-    Node("CHIP_SP", "SharePoint", lane="経営企画部", col=6, kind="chip", dx=120, dy=70, fill="#D9ECFF"),
-
+    Node(
+        "CHIP_SP",
+        "SharePoint",
+        lane="経営企画部",
+        col=6,
+        kind="chip",
+        dx=120,
+        dy=70,
+        fill="#D9ECFF",
+    ),
     Node("END", "終了", lane="経営企画部", col=6, kind="end", dx=260, fill="#DDDDDD"),
 ]
 
 EDGES: List[Edge] = [
     Edge("START", "SF_INPUT"),
     Edge("SF_INPUT", "SLACK_DONE"),
-    Edge("SLACK_DONE", "EXCEL_SUM"),         # down
+    Edge("SLACK_DONE", "EXCEL_SUM"),  # down
     Edge("EXCEL_SUM", "RECON"),
     Edge("RECON", "DEC_DIFF"),
-
     # Decision branches: Yes=green, No=red
     Edge("DEC_DIFF", "FIX", label="Yes", color="#2E7D32"),
     Edge("DEC_DIFF", "FINAL", label="No", color="#C62828"),
-
     # Loop back (dashed red)
     Edge("FIX", "RECON", dashed=True, color="#C62828", shape="curved"),
-
     Edge("FINAL", "PPT"),
     Edge("PPT", "REVIEW"),
     Edge("REVIEW", "MEETING"),
@@ -125,21 +149,27 @@ EDGES: List[Edge] = [
 # 4) Coordinate helpers (backward compat wrappers)
 # =========================
 
+
 def lane_index(lane: str) -> int:
     return LANES.index(lane)
 
+
 def swimlane_total_height_compat(cfg: Layout) -> int:
     from src.swimlane_lib import swimlane_total_height
+
     return swimlane_total_height(cfg, len(LANES))
+
 
 def swimlane_total_width_compat(cfg: Layout) -> int:
     from src.swimlane_lib import swimlane_total_width
+
     return swimlane_total_width(cfg, len(COLUMNS))
 
 
 # =========================
 # Main
 # =========================
+
 
 def main():
     api = MiroClient()

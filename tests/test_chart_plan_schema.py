@@ -7,12 +7,12 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-import pytest
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-SCHEMA_PATH = PROJECT_ROOT / ".claude" / "skills" / "chart-planner" / "assets" / "chart_plan_schema.json"
+SCHEMA_PATH = (
+    PROJECT_ROOT / ".claude" / "skills" / "chart-planner" / "assets" / "chart_plan_schema.json"
+)
 
 
 class TestSchemaLayoutSync:
@@ -25,6 +25,7 @@ class TestSchemaLayoutSync:
 
     def _get_dataclass_layout_fields(self):
         from src.swimlane_lib import Layout
+
         return {f.name for f in fields(Layout)}
 
     def test_schema_accepts_all_layout_fields(self):
