@@ -109,7 +109,7 @@ swimlane_chart.py
 | | `decision_w` x `decision_h` | 110 x 110 | 判断ノードのデフォルトサイズ |
 | | `chip_w` x `chip_h` | 130 x 28 | チップ（システム名タグ）のデフォルトサイズ |
 | タイトル | `title_y_offset` | 260 | スイムレーン上端からのタイトル表示距離 |
-| | `frame_padding` | 200 | フレーム外側の余白 |
+| | `frame_padding` | 200 | 背景ボックスの内側パディング（コンテンツ領域の左右に各100px） |
 
 ---
 
@@ -229,6 +229,19 @@ r"^\[(?P<key>[A-Z0-9_]+)\]\s"
 
 Miro API には「線（line）」の直接作成がないため、細い矩形で代用する。
 
+### 7.1 フレームと背景ボックスの余白
+
+Miro Frame と背景ボックス（外枠フレーム）の間には以下の余白がある:
+
+| 方向 | 余白 | 決定元 |
+|---|---|---|
+| 左 | 50px | `FRAME_SIDE_MARGIN`（generate_chart.py） |
+| 右 | 50px | `FRAME_SIDE_MARGIN`（generate_chart.py） |
+| 上 | 150px | タイトル・サブタイトル領域 |
+| 下 | 50px | `TITLE_EXTRA_HEIGHT/2 - ORIGIN_Y_TITLE_OFFSET` |
+
+背景ボックスの中心は `frame_cx = cfg.origin_x`（フレーム中心と一致）に配置される。
+
 ---
 
 ## 8. 依存関係
@@ -286,6 +299,7 @@ Miro API には「線（line）」の直接作成がないため、細い矩形�
 | JSON/YAML 入力対応 | ノード・エッジ定義を外部ファイル（chart_plan.json）から読み込み | ✅ 実装済み |
 | Frame ベース分離 | 各 run ごとに専用 Frame を作成し、スコープ管理 | ✅ 実装済み |
 | cleanup / validate | run_id スコープでの一括削除と Miro 読戻し検証 | ✅ 実装済み |
+| フレームはみ出し検出 | validate_chart.py に `check_frame_overflow()` を追加。4方向の境界チェック | ✅ 実装済み |
 | レーン順序最適化 | コネクタ交差を最小化するレーン配置アルゴリズム | ✅ 実装済み（chart-planner） |
 | ノードサイズ自動調整 | ラベル文字数に応じた width 自動計算 | 未着手 |
 | テンプレートボード複製 | レーン背景をテンプレートから複製し、ノードのみ API で追加する方式 | 未着手 |

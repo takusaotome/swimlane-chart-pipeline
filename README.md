@@ -99,7 +99,7 @@ cp .env.example .env
 python scripts/generate_chart.py <chart_plan.json> [--run-id <uuid>]
 ```
 
-### チャートの検証
+### チャートの検証（重複・ラベル切れ・コネクタ欠損・フレームはみ出し）
 
 ```bash
 python scripts/validate_chart.py <output/run_id/miro_items.json> [--chart-plan <json>]
@@ -214,7 +214,7 @@ swimlane-chart/
 | `decision_w` | 110 | 判定ノードの幅 |
 | `decision_h` | 110 | 判定ノードの高さ |
 | `chip_w` | 130 | チップノードの幅 |
-| `frame_padding` | 200 | フレーム右側の余白 |
+| `frame_padding` | 200 | 背景ボックスの内側パディング（コンテンツ領域の左右に各100px） |
 
 各ノードの `dx`, `dy` で同一カラム・レーン内の微調整が可能。
 
@@ -242,6 +242,7 @@ swimlane-chart/
 - コネクタの経路（折れ曲がり位置）は Miro が自動決定する
 - レート制限: 100,000 クレジット/分（通常の利用では問題なし）
 - Frame 内アイテムは `parent_top_left` 相対座標で配置される
+- Frame と背景ボックスの間には上下左右に余白がある（左右: `FRAME_SIDE_MARGIN`=50px、下: 50px、上: 150px（タイトル領域））
 - 削除済みアイテムへのクリーンアップは 404 を正常扱いして即完了する
 
 ## ドキュメント

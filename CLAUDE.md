@@ -26,7 +26,7 @@ python scripts/generate_chart.py <chart_plan.json> [--run-id <uuid>]
 # 生成済みチャートの削除
 python scripts/cleanup_chart.py <output/run_id/miro_items.json> [--force]
 
-# チャートのバリデーション（重複・ラベル切れ・コネクタ欠損チェック）
+# チャートのバリデーション（重複・ラベル切れ・コネクタ欠損・フレームはみ出しチェック）
 python scripts/validate_chart.py <output/run_id/miro_items.json> [--chart-plan <json>]
 
 # ハードコードされたデモ（月次売上報告フロー）
@@ -98,3 +98,25 @@ Agents: `process-consultant`（要件レビュー）、`chart-layout-reviewer`�
   - trailing-whitespace, end-of-file-fixer, check-yaml, check-toml, check-json
   - ruff (lint + auto-fix) / ruff-format (formatter)
   - mypy (static type check, src/ と scripts/ 対象)
+
+### ドキュメント同期チェック（必須）
+
+コードの修正・新機能実装・仕様変更が完了したら、**コミット前に**以下のドキュメントが最新のコードと整合しているか確認し、必要に応じて更新すること。作業計画を立てる際にも、最終ステップとしてこのチェックを含めること。
+
+**対象ドキュメント:**
+
+| ファイル | 確認観点 |
+|---|---|
+| `CLAUDE.md` | CLI コマンド、アーキテクチャ説明、API 制約、開発プラクティスが最新か |
+| `README.md` | 使い方、プロジェクト構造ツリー、パラメータ表、制約事項が最新か |
+| `docs/miro-chart-architecture.md` | データモデル、座標計算、ノード種別、レイアウトデフォルト値が最新か |
+| `docs/pipeline-design.md` | Skill/Agent 構成、ファイル構造、パッチ形式が最新か |
+| `docs/setup-guide.md` | セットアップ手順、依存パッケージが最新か |
+| `.claude/skills/*/SKILL.md` | 変更した Skill のワークフロー記述が最新か |
+| `.claude/agents/*.md` | 変更した Agent のレビュー観点・出力形式が最新か |
+
+**チェック手順:**
+
+1. 変更したコードの公開インターフェース（関数シグネチャ、デフォルト値、CLI 引数等）を特定する
+2. 上記ドキュメント内で該当箇所を検索し、差分がないか確認する
+3. 差分があれば修正し、同じコミットに含める
