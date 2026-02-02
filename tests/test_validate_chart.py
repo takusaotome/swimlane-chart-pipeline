@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import sys
 from pathlib import Path
 
@@ -398,3 +399,141 @@ class TestCheckConnectorCompleteness:
 
         findings = check_connector_completeness({"connectors": []}, [])
         assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# validate() orchestration
+# ---------------------------------------------------------------------------
+
+
+class TestValidateOrchestration:
+    """Tests for the validate() function end-to-end with mocked MiroClient."""
+
+    def _write_miro_items(self, tmp_path, data):
+        p = tmp_path / "miro_items.json"
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        return str(p)
+
+    def _write_chart_plan(self, tmp_path, data):
+        p = tmp_path / "chart_plan.json"
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        return str(p)
+
+    def test_produces_report_with_pass_status(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        mock_api = MagicMock()
+        mock_api.readback_frame_items.return_value = [
+            {
+                "id": "i1",
+                "type": "shape",
+                "data": {"content": "OK"},
+                "position": {"x": 100, "y": 100},
+                "geometry": {"width": 170, "height": 80},
+                "style": {"fontSize": 14},
+            },
+        ]
+        mock_api.get_connectors.return_value = {
+            "data": [{"id": "c1"}],
+        }
+
+        monkeypatch.setattr("scripts.validate_chart.MiroClient", lambda: mock_api)
+
+        miro_items_path = self._write_miro_items(
+            tmp_path,
+            {
+                "run_id": "test-run",
+                "frame_id": "frame-1",
+                "items": [{"key": "T1", "miro_id": "i1"}],
+                "connectors": [{"src": "A", "dst": "B", "miro_id": "c1"}],
+            },
+        )
+
+        from scripts.validate_chart import validate
+
+        report = validate(miro_items_path)
+
+        assert report["run_id"] == "test-run"
+        assert report["status"] == "pass"
+        assert report["item_count"] == 1
+        assert (tmp_path / "validation_report.json").exists()
+
+    def test_produces_report_with_fail_status_on_overlap(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        mock_api = MagicMock()
+        mock_api.readback_frame_items.return_value = [
+            {
+                "id": "i1",
+                "type": "shape",
+                "data": {"content": "A"},
+                "position": {"x": 100, "y": 100},
+                "geometry": {"width": 170, "height": 80},
+                "style": {},
+            },
+            {
+                "id": "i2",
+                "type": "shape",
+                "data": {"content": "B"},
+                "position": {"x": 120, "y": 110},
+                "geometry": {"width": 170, "height": 80},
+                "style": {},
+            },
+        ]
+        mock_api.get_connectors.return_value = {"data": []}
+
+        monkeypatch.setattr("scripts.validate_chart.MiroClient", lambda: mock_api)
+
+        miro_items_path = self._write_miro_items(
+            tmp_path,
+            {
+                "run_id": "test-run",
+                "frame_id": "frame-1",
+                "items": [],
+                "connectors": [],
+            },
+        )
+
+        from scripts.validate_chart import validate
+
+        report = validate(miro_items_path)
+
+        assert report["status"] == "fail"
+        overlap_findings = [f for f in report["findings"] if f["type"] == "overlap"]
+        assert len(overlap_findings) >= 1
+
+    def test_includes_lane_balance_when_chart_plan_provided(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        mock_api = MagicMock()
+        mock_api.readback_frame_items.return_value = []
+        mock_api.get_connectors.return_value = {"data": []}
+
+        monkeypatch.setattr("scripts.validate_chart.MiroClient", lambda: mock_api)
+
+        miro_items_path = self._write_miro_items(
+            tmp_path,
+            {
+                "run_id": "test-run",
+                "frame_id": "frame-1",
+                "items": [],
+                "connectors": [],
+            },
+        )
+        chart_plan_path = self._write_chart_plan(
+            tmp_path,
+            {
+                "lanes": ["A", "B"],
+                "nodes": [
+                    {"key": "N1", "label": "T", "lane": "A", "col": 0, "kind": "task"},
+                ],
+            },
+        )
+
+        from scripts.validate_chart import validate
+
+        report = validate(miro_items_path, chart_plan_path)
+
+        empty_lane = [f for f in report["findings"] if f["type"] == "empty_lane"]
+        assert len(empty_lane) == 1
+        assert empty_lane[0]["lane"] == "B"

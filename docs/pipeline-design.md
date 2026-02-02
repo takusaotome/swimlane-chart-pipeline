@@ -10,44 +10,38 @@
 
 ## パイプライン全体像
 
-```
-[Input: 議事録/メモ/箇条書き]
-        │
-┌───────▼──────────────────────────┐
-│ Step 1: process-analyzer         │  ← Skill
-│  不明点はAskで質問               │
-│  終了条件: 2ラウンドor15問       │
-│  残りは「前提」として記録        │
-└───────┬──────────────────────────┘
-        │ output/{run_id}/requirements.md
-        │ ★ ユーザー確認ポイント
-┌───────▼──────────────────────────┐
-│ Step 2: requirements-reviewer    │  ← Skill + process-consultant Agent
-│  抜け漏れ・矛盾を検出           │
-│  修正は差分提案→ユーザー承認     │
-│  最大3ラウンド                   │
-└───────┬──────────────────────────┘
-        │ output/{run_id}/requirements.md (修正済)
-┌───────▼──────────────────────────┐
-│ Step 3: chart-planner            │  ← Skill
-│  要件 → chart_plan.json          │
-└───────┬──────────────────────────┘
-        │ output/{run_id}/chart_plan.json
-┌───────▼──────────────────────────┐
-│ Step 4: chart-generator          │  ← Skill
-│  JSON → Miro API (専用Frame)     │
-│  随時miro_items.json flush       │
-└───────┬──────────────────────────┘
-        │ output/{run_id}/miro_items.json
-┌───────▼──────────────────────────┐
-│ Step 5: (swimlane-pipeline内)    │  ← chart-layout-reviewer Agent
-│  Miro API読戻し + 検証           │
-│  修正はJSON Patch形式で提案      │
-└───────┬──────────────────────────┘
-        │ 問題あり → cleanup → Step 3 (最大3回)
-        │ ★ 問題検出時はユーザー確認
-        ▼
-[Complete: Miro Board URL]
+```mermaid
+flowchart TD
+    INPUT["📄 議事録 / メモ / 箇条書き"]
+    S1["Step 1: process-analyzer<br/>業務プロセス分析 → requirements.md<br/>不明点はAskで質問（2ラウンド/15問）"]
+    UC1{{"★ ユーザー確認<br/>要件定義書の承認"}}
+    S2["Step 2: requirements-reviewer<br/>+ process-consultant Agent<br/>抜け漏れ・矛盾を検出"]
+    S2CHECK{"Critical/Major<br/>指摘あり？"}
+    S2ROUND{"3ラウンド<br/>到達？"}
+    S3["Step 3: chart-planner<br/>要件 → chart_plan.json<br/>★ レーン順序最適化・カラム統合"]
+    S4["Step 4: chart-generator<br/>JSON → Miro API（専用Frame内）<br/>随時miro_items.json flush"]
+    S5["Step 5: chart-layout-reviewer<br/>Miro API読戻し + 検証<br/>JSON Patch形式で修正提案"]
+    S5CHECK{"レイアウト<br/>問題あり？"}
+    S5ROUND{"3ラウンド<br/>到達？"}
+    CLEANUP["cleanup → chart_plan.json パッチ適用"]
+    OUTPUT["🎯 Miro Board URL"]
+
+    INPUT --> S1
+    S1 --> UC1
+    UC1 -->|承認| S2
+    S2 --> S2CHECK
+    S2CHECK -->|No| S3
+    S2CHECK -->|Yes| S2ROUND
+    S2ROUND -->|No| S2
+    S2ROUND -->|Yes| S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> S5CHECK
+    S5CHECK -->|No| OUTPUT
+    S5CHECK -->|Yes| S5ROUND
+    S5ROUND -->|No| CLEANUP
+    S5ROUND -->|Yes| OUTPUT
+    CLEANUP --> S4
 ```
 
 ### Step 5 の責務明確化
@@ -213,17 +207,17 @@ process-analyzer skillの質問ループに明確な打ち切り条件を設け�
   "lanes": ["各営業拠点", "営業企画部", "経理部", "経営企画部", "経営企画部長"],
   "columns": ["売上締め", "集計・確認", "差異分析", "修正・再確認", "承認", "報告"],
   "layout": {
-    "lane_height": 220,
-    "col_width": 360,
-    "left_label_width": 240,
+    "lane_height": 200,
+    "col_width": 420,
+    "left_label_width": 260,
     "header_height": 80,
     "frame_padding": 200,
-    "task_w": 170,
+    "task_w": 160,
     "task_h": 80,
-    "decision_w": 90,
-    "decision_h": 90,
-    "chip_w": 90,
-    "chip_h": 26
+    "decision_w": 110,
+    "decision_h": 110,
+    "chip_w": 130,
+    "chip_h": 28
   },
   "nodes": [
     {
@@ -232,7 +226,7 @@ process-analyzer skillの質問ループに明確な打ち切り条件を設け�
       "lane": "各営業拠点",
       "col": 0,
       "kind": "start",
-      "dx": -230,
+      "dx": -260,
       "dy": 0,
       "fill": "#BFE9D6"
     },
@@ -282,10 +276,12 @@ process-analyzer skillの質問ループに明確な打ち切り条件を設け�
 ### 削除（cleanup）の安全策
 
 1. miro_items.json の run_id + frame_id で対象を特定
-2. Frame内のアイテムのみ削除対象
-3. 削除前にアイテム数の照合（JSONの件数 vs API readbackの件数）
-4. 不一致時は警告を出してユーザー確認を求める
-5. 削除はコネクタ → シェイプ → テキスト → Frame の順序（依存関係順）
+2. **Frame 存在チェック**: Frame が既に削除済みなら即完了（全アイテムも消去済みと判断）
+3. Frame内のアイテムのみ削除対象
+4. 削除前にアイテム数の照合（JSONの件数 vs API readbackの件数）
+5. 不一致時は警告を出してユーザー確認を求める
+6. 削除はコネクタ → シェイプ → テキスト → Frame の順序（依存関係順）
+7. **404 は正常扱い**: 削除済みアイテムへの DELETE は 404 で即 return（リトライしない）
 
 ---
 
@@ -419,14 +415,16 @@ swimlane-chart/
 **処理フロー:**
 
 1. 部門一覧 → `lanes` 配列
-2. 工程フェーズ → `columns` 配列 (日付限定ではなくフェーズとして定義)
-3. 各プロセスステップ → `nodes` 配列 (key, label, lane, col, kind)
-4. 同一セル内の複数ノード → dx/dy オフセット計算（layout_heuristics.md に従う）
-5. プロセス間の接続 → `edges` 配列（逆流エッジも含む）
-6. システムラベル → chip ノード
-7. レイアウトパラメータの自動調整（レーン数・カラム数に応じてサイズ計算）
-8. `schema_version` と `run_id` をセット
-9. バリデーション: 全edgeのsrc/dstが存在するか、全nodeのlaneがlanesに存在するか
+2. **レーン順序の最適化**: 隣接性原則（接続の多いレーン同士を隣接）、分岐近接原則（decision の分岐先を隣接）、空レーン回避
+3. 工程フェーズ → `columns` 配列 (日付限定ではなくフェーズとして定義)
+4. **カラムの統合検討**: decision と直前タスクの同一カラム配置、空カラム排除、目標 ≤7 カラム
+5. 各プロセスステップ → `nodes` 配列 (key, label, lane, col, kind)
+6. 同一セル内の複数ノード → dx/dy オフセット計算（layout_heuristics.md に従う、2ノードは ±100、3ノードは -160/0/+160）
+7. プロセス間の接続 → `edges` 配列（逆流エッジも含む）
+8. システムラベル → chip ノード
+9. レイアウトパラメータの自動調整（レーン数・カラム数に応じてサイズ計算）
+10. `schema_version` と `run_id` をセット
+11. バリデーション: 全edgeのsrc/dstが存在するか、全nodeのlaneがlanesに存在するか、decision の分岐先レーンが隣接しているか、カラム数 ≤7 か
 
 **出力:** `output/{run_id}/chart_plan.json`
 
@@ -493,11 +491,15 @@ model: sonnet
 - **レビュー観点:**
   1. ノード間の重なり（バウンディングボックス交差）
   2. コネクタの欠落・断絶
-  3. ラベルの切れ（テキスト長 vs ノードサイズ。日本語は~16px/文字で概算）
-  4. レーン間のバランス（空レーン、過密レーン）
-  5. 色の一貫性
-  6. 判断ダイヤモンドのラベル収まり
-  7. 逆流エッジの視認性
+  3. コネクタの交差（レーン並び替えで解消可能か）
+  4. ラベルの切れ（テキスト長 vs ノードサイズ。日本語は~16px/文字で概算）
+  5. レーン間のバランス（空レーン、過密レーン）
+  6. カラム使用効率（空カラムの排除、統合可能なカラム）
+  7. 色の一貫性
+  8. 判断ダイヤモンドのラベル収まり（110×110 で有効表示幅 ~70px）
+  9. 逆流エッジの視認性
+  10. end ノードの配置（最終フローの到達レーン・カラムに配置）
+- **修正パッチ対応パス:** `/nodes/{index}/dx`, `/nodes/{index}/dy`, `/nodes/{index}/lane`, `/nodes/{index}/col`, `/lanes`, `/columns`, `/layout/col_width`, `/layout/task_w`, `/layout/decision_w`, `/layout/decision_h`, `/layout/chip_w`
 - **出力:** JSON Patch形式の修正指示
 
 ```json
@@ -575,7 +577,7 @@ model: opus
 
 ## 実装順序
 
-### Phase 1: 基盤整備 (コードリファクタリング)
+### Phase 1: 基盤整備 (コードリファクタリング) ✅ 完了
 
 1. `src/` ディレクトリ作成、`swimlane_lib.py` に共通ロジック抽出
 2. `src/chart_plan_loader.py` 作成 (JSON → dataclass変換 + バリデーション)
@@ -584,32 +586,29 @@ model: opus
 5. `swimlane_chart.py` をインポート方式に変更
 6. 検証: JSONからの生成が元のスクリプトと同一結果になることを確認
 
-### Phase 2: ユーティリティスクリプト
+### Phase 2: ユーティリティスクリプト ✅ 完了
 
-7. `scripts/cleanup_chart.py` 作成（run_idスコープ、削除順序制御）
+7. `scripts/cleanup_chart.py` 作成（run_idスコープ、削除順序制御、404正常扱い）
 8. `scripts/validate_chart.py` 作成（重なり検出、接続検証、ラベル切れ検出）
 9. 検証: 生成 → 読戻し → 検証 → 削除のサイクル動作確認
 
-### Phase 3: Agent定義作成
+### Phase 3: Agent定義作成 ✅ 完了
 
 10. `.claude/agents/process-consultant.md`
-11. `.claude/agents/chart-layout-reviewer.md` (JSON Patch出力形式を明記)
+11. `.claude/agents/chart-layout-reviewer.md` (JSON Patch出力形式、コネクタ交差・カラム効率・endノード配置レビュー)
 12. `.claude/agents/process-analyst.md`
 
-### Phase 4: Skill作成（下流 → 上流の順）
+### Phase 4: Skill作成（下流 → 上流の順） ✅ 完了
 
-13. chart-generator skill + references (miro_api_constraints.md)
-14. chart-planner skill + references (layout_heuristics.md, node_kind_guide.md, color_palette.md) + schema
+13. chart-generator skill + references (miro_api_constraints.md: Frame内座標・parent注入)
+14. chart-planner skill + references (layout_heuristics.md: レーン順序最適化・カラム統合, node_kind_guide.md: 更新済みサイズ, color_palette.md) + schema
 15. requirements-reviewer skill + references (review_criteria.md, common_gaps.md)
 16. process-analyzer skill + references (process_analysis_checklist.md, question_patterns.md)
 
-### Phase 5: マスターオーケストレーター + 統合テスト
+### Phase 5: マスターオーケストレーター + 統合テスト ✅ 完了
 
 17. swimlane-pipeline skill 作成 (Step 5レビューループ含む)
-18. 検証1: 既存の月次売上報告フローでend-to-endテスト
-    - `examples/monthly_report_flow.json` を使ってStep 3-5をテスト
-19. 検証2: 新しい業務プロセスのテキストからend-to-endテスト
-    - Step 1から全ステップを通しでテスト
+18. E2Eテスト: インボイス自動処理フロー（7レーン・7カラム・23ノード・23コネクタ・3分岐判定）で全ステップ通しテスト完了
 
 ---
 
@@ -650,9 +649,12 @@ python scripts/cleanup_chart.py output/{run_id}/miro_items.json
 
 | リスク | 対策 |
 |---|---|
-| dx/dy計算の精度 | layout_heuristics.mdにルールを詳細に記載。同一セル内2ノードはdx±90 |
-| 日本語ラベル幅の見積り | ~16px/文字で概算。validate_chart.pyで切れ検出 |
-| Miro APIバルク削除なし | コネクタ→シェイプ→テキスト→Frame順の逐次削除。バッチ間0.1s sleep |
+| dx/dy計算の精度 | layout_heuristics.mdにルールを詳細に記載。同一セル内2ノードはdx±100、3ノードは-160/0/+160 |
+| 日本語ラベル幅の見積り | ~16px/文字で概算。decision(110×110)は有効幅~70px=4文字/行。validate_chart.pyで切れ検出 |
+| コネクタ交差 | レーン順序最適化（隣接性原則・分岐近接原則）で交差を最小化 |
+| Miro APIバルク削除なし | コネクタ→シェイプ→テキスト→Frame順の逐次削除。404は正常扱い（既削除）で即return |
+| cleanup時のハング | Frame存在チェックで早期終了。delete_item/delete_connectorに404ハンドリング追加 |
 | コネクタ経路の制御不能 | 3レーン以上跨ぐエッジは透明アンカーノード中継を検討 |
+| Frame内座標系 | 全アイテムにparentプロパティでFrame IDを注入。relativeTo: parent_top_left相対座標で配置 |
 | パイプライン中断時の回復 | miro_items.json随時flush + run_idスコープでcleanup可能 |
 | LLMによる事実書換リスク | Critical/Major修正はユーザー承認必須。自動適用はMinor/Infoの追記のみ |

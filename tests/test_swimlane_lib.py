@@ -1,5 +1,6 @@
 """Tests for src/swimlane_lib.py — M2 (atomic write), m1 (load_dotenv), m2 (except scope),
-plus coordinate helpers, payload builders, and utility functions."""
+plus coordinate helpers, payload builders, utility functions, retry decorator,
+and MiroClient business logic."""
 
 from __future__ import annotations
 
@@ -7,6 +8,10 @@ import ast
 import json
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -491,3 +496,462 @@ class TestBuildNodeItems:
         _, items = build_node_items(cfg, nodes, ["A"], 1)
         assert items[0]["geometry"]["width"] == 200
         assert items[0]["geometry"]["height"] == 100
+
+
+# ---------------------------------------------------------------------------
+# Retry decorator
+# ---------------------------------------------------------------------------
+
+
+class TestRetryDecorator:
+    """Tests for the retry() decorator with exponential backoff."""
+
+    def test_success_on_first_attempt(self):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+
+        @retry(max_attempts=3, backoff_schedule=[0.0])
+        def succeed():
+            nonlocal call_count
+            call_count += 1
+            return "ok"
+
+        assert succeed() == "ok"
+        assert call_count == 1
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_retries_on_http_error(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.headers = {}
+
+        @retry(max_attempts=3, backoff_schedule=[0.1, 0.2])
+        def fail_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise requests.exceptions.HTTPError("500", response=mock_resp)
+            return "ok"
+
+        assert fail_then_succeed() == "ok"
+        assert call_count == 3
+        assert mock_sleep.call_count == 2
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_429_respects_retry_after(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+        mock_resp = MagicMock()
+        mock_resp.status_code = 429
+        mock_resp.headers = {"Retry-After": "5"}
+
+        @retry(max_attempts=2, backoff_schedule=[1.0])
+        def fail_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise requests.exceptions.HTTPError("429", response=mock_resp)
+            return "ok"
+
+        assert fail_then_succeed() == "ok"
+        # Should use Retry-After value (5.0), not backoff_schedule (1.0)
+        mock_sleep.assert_called_once_with(5.0)
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_429_without_retry_after_uses_backoff(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+        mock_resp = MagicMock()
+        mock_resp.status_code = 429
+        mock_resp.headers = {}
+
+        @retry(max_attempts=2, backoff_schedule=[2.0])
+        def fail_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise requests.exceptions.HTTPError("429", response=mock_resp)
+            return "ok"
+
+        assert fail_then_succeed() == "ok"
+        mock_sleep.assert_called_once_with(2.0)
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_retries_on_connection_error(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+
+        @retry(max_attempts=2, backoff_schedule=[0.1])
+        def fail_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise requests.exceptions.ConnectionError("connection refused")
+            return "ok"
+
+        assert fail_then_succeed() == "ok"
+        assert call_count == 2
+        mock_sleep.assert_called_once()
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_retries_on_timeout(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        call_count = 0
+
+        @retry(max_attempts=2, backoff_schedule=[0.1])
+        def fail_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise requests.exceptions.Timeout("timed out")
+            return "ok"
+
+        assert fail_then_succeed() == "ok"
+        assert call_count == 2
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_raises_after_max_attempts(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.headers = {}
+
+        @retry(max_attempts=2, backoff_schedule=[0.1])
+        def always_fail():
+            raise requests.exceptions.HTTPError("500", response=mock_resp)
+
+        with pytest.raises(requests.exceptions.HTTPError):
+            always_fail()
+
+    @patch("src.swimlane_lib.time.sleep")
+    def test_no_sleep_on_last_attempt(self, mock_sleep):
+        from src.swimlane_lib import retry
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.headers = {}
+
+        @retry(max_attempts=2, backoff_schedule=[1.0])
+        def always_fail():
+            raise requests.exceptions.HTTPError("500", response=mock_resp)
+
+        with pytest.raises(requests.exceptions.HTTPError):
+            always_fail()
+        # Only 1 sleep (after attempt 1), not after the final attempt
+        assert mock_sleep.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# MiroClient
+# ---------------------------------------------------------------------------
+
+
+class TestMiroClientInit:
+    """Tests for MiroClient initialization."""
+
+    def test_raises_without_token(self, monkeypatch):
+        monkeypatch.setenv("MIRO_TOKEN", "")
+        monkeypatch.setenv("MIRO_BOARD_ID", "board-1")
+        from src.swimlane_lib import MiroClient
+
+        with pytest.raises(ValueError, match="MIRO_TOKEN"):
+            MiroClient()
+
+    def test_raises_without_board_id(self, monkeypatch):
+        monkeypatch.setenv("MIRO_TOKEN", "tok-123")
+        monkeypatch.setenv("MIRO_BOARD_ID", "")
+        from src.swimlane_lib import MiroClient
+
+        with pytest.raises(ValueError, match="MIRO_BOARD_ID"):
+            MiroClient()
+
+    def test_creates_with_explicit_args(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        assert client.token == "tok"
+        assert client.board_id == "board"
+
+
+class TestMiroClientRaiseForStatus:
+    """Tests for MiroClient._raise_for_status."""
+
+    def test_no_raise_for_200(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        resp = MagicMock()
+        resp.status_code = 200
+        client._raise_for_status(resp)  # Should not raise
+
+    def test_raises_for_400(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.text = "Bad Request"
+        with pytest.raises(requests.exceptions.HTTPError):
+            client._raise_for_status(resp)
+
+
+class TestMiroClientFindRightmostFrame:
+    """Tests for MiroClient.find_rightmost_frame."""
+
+    def test_no_frames_returns_origin(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_items = MagicMock(
+            return_value={
+                "data": [
+                    {"type": "shape", "position": {"x": 500}, "geometry": {"width": 200}},
+                ]
+            }
+        )
+        assert client.find_rightmost_frame() == (0, 0)
+
+    def test_single_frame(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_items = MagicMock(
+            return_value={
+                "data": [
+                    {
+                        "type": "frame",
+                        "position": {"x": 100, "y": 50},
+                        "geometry": {"width": 400},
+                    },
+                ]
+            }
+        )
+        # right_edge = 100 + 400//2 = 300
+        assert client.find_rightmost_frame() == (300, 50)
+
+    def test_multiple_frames_picks_rightmost(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_items = MagicMock(
+            return_value={
+                "data": [
+                    {
+                        "type": "frame",
+                        "position": {"x": 100, "y": 50},
+                        "geometry": {"width": 400},
+                    },
+                    {
+                        "type": "frame",
+                        "position": {"x": 1000, "y": 200},
+                        "geometry": {"width": 600},
+                    },
+                ]
+            }
+        )
+        # Frame 1: right_edge = 100 + 200 = 300
+        # Frame 2: right_edge = 1000 + 300 = 1300
+        assert client.find_rightmost_frame() == (1300, 200)
+
+    def test_pagination(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        # Page 1: has a cursor → more pages
+        page1 = {
+            "data": [
+                {"type": "frame", "position": {"x": 100, "y": 0}, "geometry": {"width": 200}},
+            ],
+            "cursor": "page2",
+        }
+        # Page 2: no cursor → last page
+        page2 = {
+            "data": [
+                {"type": "frame", "position": {"x": 500, "y": 10}, "geometry": {"width": 200}},
+            ],
+        }
+        client.get_items = MagicMock(side_effect=[page1, page2])
+        # Frame 1: right_edge = 100 + 100 = 200
+        # Frame 2: right_edge = 500 + 100 = 600
+        assert client.find_rightmost_frame() == (600, 10)
+        assert client.get_items.call_count == 2
+
+
+class TestMiroClientReadbackFrameItems:
+    """Tests for MiroClient.readback_frame_items."""
+
+    def test_single_page(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_frame_items = MagicMock(
+            return_value={
+                "data": [{"id": "1"}, {"id": "2"}],
+            }
+        )
+        result = client.readback_frame_items("frame-1")
+        assert result == [{"id": "1"}, {"id": "2"}]
+
+    def test_multiple_pages(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_frame_items = MagicMock(
+            side_effect=[
+                {"data": [{"id": "1"}, {"id": "2"}], "cursor": "pg2"},
+                {"data": [{"id": "3"}]},
+            ]
+        )
+        result = client.readback_frame_items("frame-1")
+        assert result == [{"id": "1"}, {"id": "2"}, {"id": "3"}]
+        assert client.get_frame_items.call_count == 2
+
+    def test_empty_frame(self):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_frame_items = MagicMock(return_value={"data": []})
+        assert client.readback_frame_items("frame-1") == []
+
+
+@patch("src.swimlane_lib.time.sleep")
+class TestMiroClientCleanupByRun:
+    """Tests for MiroClient.cleanup_by_run."""
+
+    def _write_tracked(self, tmp_path, data):
+        p = tmp_path / "miro_items.json"
+        p.write_text(json.dumps(data, ensure_ascii=False))
+        return str(p)
+
+    def test_deletes_in_correct_order(self, mock_sleep, tmp_path):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_item = MagicMock(return_value={"id": "frame-1"})
+        client.delete_connector = MagicMock()
+        client.delete_item = MagicMock()
+
+        path = self._write_tracked(
+            tmp_path,
+            {
+                "frame_id": "frame-1",
+                "connectors": [{"miro_id": "c1"}, {"miro_id": "c2"}],
+                "items": [{"miro_id": "i1"}],
+            },
+        )
+        counts = client.cleanup_by_run(path)
+
+        assert counts["connectors"] == 2
+        assert counts["items"] == 1
+        assert counts["frame"] == 1
+
+        # Verify deletion order: connectors first, then items, then frame
+        calls = []
+        for call in client.delete_connector.call_args_list:
+            calls.append(("connector", call[0][0]))
+        for call in client.delete_item.call_args_list:
+            calls.append(("item", call[0][0]))
+
+        # Connectors must come before items; frame (i.e. delete_item("frame-1")) must be last
+        connector_indices = [i for i, (t, _) in enumerate(calls) if t == "connector"]
+        item_indices = [i for i, (t, _) in enumerate(calls) if t == "item"]
+        assert max(connector_indices) < min(item_indices)
+        assert calls[-1] == ("item", "frame-1")
+
+    def test_frame_gone_returns_early(self, mock_sleep, tmp_path):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_item = MagicMock(side_effect=requests.exceptions.ConnectionError("not found"))
+        client.delete_connector = MagicMock()
+        client.delete_item = MagicMock()
+
+        path = self._write_tracked(
+            tmp_path,
+            {
+                "frame_id": "frame-gone",
+                "connectors": [{"miro_id": "c1"}],
+                "items": [{"miro_id": "i1"}],
+            },
+        )
+        counts = client.cleanup_by_run(path)
+
+        # Should return early with zero counts
+        assert counts == {"connectors": 0, "items": 0, "frame": 0, "skipped": 0}
+        client.delete_connector.assert_not_called()
+        client.delete_item.assert_not_called()
+
+    def test_connector_deletion_error_increments_skipped(self, mock_sleep, tmp_path):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_item = MagicMock(return_value={"id": "frame-1"})
+        client.delete_connector = MagicMock(side_effect=requests.exceptions.HTTPError("500"))
+        client.delete_item = MagicMock()
+
+        path = self._write_tracked(
+            tmp_path,
+            {
+                "frame_id": "frame-1",
+                "connectors": [{"miro_id": "c1"}],
+                "items": [],
+            },
+        )
+        counts = client.cleanup_by_run(path)
+
+        assert counts["connectors"] == 0
+        assert counts["skipped"] == 1
+
+    def test_item_deletion_error_increments_skipped(self, mock_sleep, tmp_path):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_item = MagicMock(return_value={"id": "frame-1"})
+        client.delete_connector = MagicMock()
+        client.delete_item = MagicMock(side_effect=requests.exceptions.HTTPError("500"))
+
+        path = self._write_tracked(
+            tmp_path,
+            {
+                "frame_id": "frame-1",
+                "connectors": [],
+                "items": [{"miro_id": "i1"}],
+            },
+        )
+        counts = client.cleanup_by_run(path)
+
+        assert counts["items"] == 0
+        # skipped: item + frame (both fail with HTTPError)
+        assert counts["skipped"] == 2
+
+    def test_no_frame_id(self, mock_sleep, tmp_path):
+        from src.swimlane_lib import MiroClient
+
+        client = MiroClient(token="tok", board_id="board")
+        client.get_item = MagicMock()
+        client.delete_connector = MagicMock()
+        client.delete_item = MagicMock()
+
+        path = self._write_tracked(
+            tmp_path,
+            {
+                "connectors": [{"miro_id": "c1"}],
+                "items": [{"miro_id": "i1"}],
+            },
+        )
+        counts = client.cleanup_by_run(path)
+
+        assert counts["connectors"] == 1
+        assert counts["items"] == 1
+        assert counts["frame"] == 0
+        # get_item should not be called when there's no frame_id
+        client.get_item.assert_not_called()
