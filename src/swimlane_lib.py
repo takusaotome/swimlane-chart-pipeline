@@ -25,8 +25,6 @@ from typing import (
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
-
 F = TypeVar("F", bound=Callable[..., Any])
 
 # ---------------------------------------------------------------------------
@@ -439,6 +437,7 @@ class MiroClient:
         board_id: Optional[str] = None,
         timeout: int = 30,
     ):
+        load_dotenv()
         self.token = token or os.environ.get("MIRO_TOKEN", "")
         self.board_id = board_id or os.environ.get("MIRO_BOARD_ID", "")
         self.timeout = timeout
@@ -690,7 +689,7 @@ class MiroClient:
                     self.delete_connector(miro_id)
                     counts["connectors"] += 1
                     time.sleep(0.1)
-                except Exception as exc:
+                except requests.exceptions.RequestException as exc:
                     print(f"WARN: Failed to delete connector {miro_id}: {exc}")
 
         # 2. Delete items (shapes, text)
@@ -701,7 +700,7 @@ class MiroClient:
                     self.delete_item(miro_id)
                     counts["items"] += 1
                     time.sleep(0.1)
-                except Exception as exc:
+                except requests.exceptions.RequestException as exc:
                     print(f"WARN: Failed to delete item {miro_id}: {exc}")
 
         # 3. Delete frame last
@@ -710,7 +709,7 @@ class MiroClient:
             try:
                 self.delete_item(frame_id)
                 counts["frame"] += 1
-            except Exception as exc:
+            except requests.exceptions.RequestException as exc:
                 print(f"WARN: Failed to delete frame {frame_id}: {exc}")
 
         return counts
@@ -729,7 +728,8 @@ def flush_miro_items(
     connectors: List[Dict],
     status: str = "in_progress",
 ) -> None:
-    """Write/update miro_items.json atomically."""
+    """Write/update miro_items.json atomically via tempfile + os.replace."""
+    import tempfile
     from datetime import datetime, timezone, timedelta
 
     jst = timezone(timedelta(hours=9))
@@ -742,5 +742,13 @@ def flush_miro_items(
         "connectors": connectors,
         "status": status,
     }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    dir_name = os.path.dirname(os.path.abspath(path))
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise

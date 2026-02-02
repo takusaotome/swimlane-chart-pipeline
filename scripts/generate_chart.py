@@ -21,6 +21,8 @@ from typing import Dict, List
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from dataclasses import replace
+
 from src.swimlane_lib import (
     MiroClient,
     build_background_items,
@@ -29,6 +31,8 @@ from src.swimlane_lib import (
     chunked,
     connector_payload,
     flush_miro_items,
+    swimlane_total_height,
+    swimlane_total_width,
 )
 from src.chart_plan_loader import load_chart_plan
 
@@ -50,7 +54,6 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     api = MiroClient()
 
     # Calculate chart dimensions
-    from src.swimlane_lib import swimlane_total_height, swimlane_total_width
     num_lanes = len(plan.lanes)
     num_columns = len(plan.columns)
     chart_w = swimlane_total_width(cfg, num_columns) + cfg.frame_padding
@@ -74,7 +77,6 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     print(f"Frame created: {frame_id}")
 
     # Adjust layout origin to frame center
-    from dataclasses import replace
     adjusted_cfg = replace(cfg, origin_x=frame_x, origin_y=frame_y + 50)
 
     # Track all created items for miro_items.json
@@ -103,13 +105,19 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     for batch in chunked(non_flow_items, 20):
         batch_num += 1
         created = api.bulk_create(batch)
+        batch_ids = []
         for item in created:
+            item_id = str(item.get("id", ""))
             tracked_items.append({
                 "key": "_bg",
-                "miro_id": str(item.get("id", "")),
+                "miro_id": item_id,
                 "type": item.get("type", "shape"),
                 "batch": batch_num,
             })
+            if item_id:
+                batch_ids.append(item_id)
+        if batch_ids:
+            api.attach_to_frame(frame_id, batch_ids)
         flush()
     print(f"Created {len(non_flow_items)} background/text items.")
 
@@ -123,6 +131,7 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     for batch in chunked(node_items, 20):
         batch_num += 1
         created = api.bulk_create(batch)
+        batch_ids = []
         for i, item in enumerate(created):
             item_id = str(item.get("id", ""))
             idx = offset + i
@@ -134,6 +143,9 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
                     "type": item.get("type", "shape"),
                     "batch": batch_num,
                 })
+                batch_ids.append(item_id)
+        if batch_ids:
+            api.attach_to_frame(frame_id, batch_ids)
         offset += len(batch)
         flush()
     print(f"Created {len(node_items)} flow nodes. Mapped {len(key_to_id)} IDs.")

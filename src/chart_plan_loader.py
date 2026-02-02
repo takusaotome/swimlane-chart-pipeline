@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import copy
 from typing import Any, Dict, List, NamedTuple, Optional
 
 from src.swimlane_lib import Edge, Layout, Node
@@ -66,8 +65,14 @@ def _validate_raw(raw: Dict[str, Any]) -> List[str]:
         else:
             node_keys.add(key)
 
+        label = n.get("label")
+        if not label:
+            errors.append(f"nodes[{i}] (key={key}): missing or empty 'label'")
+
         lane = n.get("lane")
-        if lane and lane not in lane_set:
+        if not lane:
+            errors.append(f"nodes[{i}] (key={key}): missing or empty 'lane'")
+        elif lane not in lane_set:
             errors.append(f"nodes[{i}] (key={key}): lane '{lane}' not in lanes list")
 
         col = n.get("col")

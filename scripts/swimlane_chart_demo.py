@@ -68,16 +68,6 @@ LAYOUT = Layout()
 # =========================
 
 NODES: List[Node] = [
-    # Title / subtitle (as text items)
-    Node("TXT_TITLE", TITLE, lane=LANES[0], col=0, kind="text", dy=-99999),
-    Node("TXT_SUB", SUBTITLE, lane=LANES[0], col=0, kind="text", dy=-99999),
-
-    # Lane labels (text items) - positioned later by builder
-    *[Node(f"LANE_LABEL_{i}", lane, lane=lane, col=0, kind="lane_label") for i, lane in enumerate(LANES)],
-
-    # Timeline header labels (text items)
-    *[Node(f"COL_LABEL_{i}", COLUMNS[i], lane=LANES[0], col=i, kind="col_label") for i in range(len(COLUMNS))],
-
     # Flow nodes (shapes)
     Node("START", "開始", lane="各営業拠点", col=0, kind="start", dx=-230, fill="#BFE9D6"),
     Node("SF_INPUT", "売上データ入力", lane="各営業拠点", col=0, kind="task", dx=-50),

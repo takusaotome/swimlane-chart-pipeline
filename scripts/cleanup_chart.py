@@ -60,6 +60,9 @@ def cleanup(miro_items_path: str, force: bool = False) -> None:
             print(f"WARNING: Frame item count mismatch!")
             print(f"  Tracked: {tracked_item_count} items")
             print(f"  Miro API: {api_count} items in frame")
+            if not sys.stdin.isatty():
+                print("Aborted: non-interactive environment. Use --force to skip verification.")
+                return
             response = input("Continue with deletion? (y/N): ").strip().lower()
             if response != "y":
                 print("Aborted.")

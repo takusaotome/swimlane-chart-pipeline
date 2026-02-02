@@ -34,6 +34,7 @@ from src.swimlane_lib import MiroClient
 
 JAPANESE_CHAR_WIDTH_PX = 16  # Approximate width per Japanese character
 LATIN_CHAR_WIDTH_PX = 9      # Approximate width per Latin character
+BG_SIZE_THRESHOLD = 500      # Items larger than this are treated as background
 
 
 def estimate_text_width(text: str, font_size: int = 14) -> float:
@@ -91,7 +92,7 @@ def check_overlaps(items: List[Dict]) -> List[Dict[str, Any]]:
         geom = item.get("geometry", {})
         w = geom.get("width", 0)
         h = geom.get("height", 0)
-        if w > 500 or h > 500:
+        if w > BG_SIZE_THRESHOLD or h > BG_SIZE_THRESHOLD:
             continue
         shape_items.append((item, bbox))
 
@@ -127,7 +128,7 @@ def check_label_truncation(items: List[Dict]) -> List[Dict[str, Any]]:
         geom = item.get("geometry", {})
         w = geom.get("width", 0)
         h = geom.get("height", 0)
-        if w > 500:  # Skip background shapes
+        if w > BG_SIZE_THRESHOLD:  # Skip background shapes
             continue
 
         # Estimate text width for the longest line
@@ -176,11 +177,9 @@ def check_connector_completeness(
     return findings
 
 
-def check_lane_balance(items: List[Dict], chart_plan: Optional[Dict] = None) -> List[Dict[str, Any]]:
+def check_lane_balance(chart_plan: Dict) -> List[Dict[str, Any]]:
     """Check for empty or overly dense lanes."""
     findings: List[Dict[str, Any]] = []
-    if not chart_plan:
-        return findings
 
     lanes = chart_plan.get("lanes", [])
     layout = chart_plan.get("layout", {})
@@ -251,7 +250,8 @@ def validate(miro_items_path: str, chart_plan_path: Optional[str] = None) -> Dic
     findings.extend(check_overlaps(frame_items))
     findings.extend(check_label_truncation(frame_items))
     findings.extend(check_connector_completeness(tracked, run_connectors))
-    findings.extend(check_lane_balance(frame_items, chart_plan))
+    if chart_plan:
+        findings.extend(check_lane_balance(chart_plan))
 
     # Summary
     severity_counts = {}

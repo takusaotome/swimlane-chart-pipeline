@@ -38,17 +38,24 @@
     "layout": {
       "type": "object",
       "properties": {
+        "origin_x": { "type": "integer", "default": 0 },
+        "origin_y": { "type": "integer", "default": 0 },
         "lane_height": { "type": "integer", "default": 220 },
+        "lane_gap": { "type": "integer", "default": 0 },
         "col_width": { "type": "integer", "default": 360 },
+        "col_gap": { "type": "integer", "default": 0 },
         "left_label_width": { "type": "integer", "default": 240 },
         "header_height": { "type": "integer", "default": 80 },
         "frame_padding": { "type": "integer", "default": 200 },
+        "divider_thickness": { "type": "integer", "default": 8 },
+        "gridline_thickness": { "type": "integer", "default": 8 },
         "task_w": { "type": "integer", "default": 170 },
         "task_h": { "type": "integer", "default": 80 },
         "decision_w": { "type": "integer", "default": 90 },
         "decision_h": { "type": "integer", "default": 90 },
         "chip_w": { "type": "integer", "default": 90 },
-        "chip_h": { "type": "integer", "default": 26 }
+        "chip_h": { "type": "integer", "default": 26 },
+        "title_y_offset": { "type": "integer", "default": 260 }
       },
       "additionalProperties": false
     },
