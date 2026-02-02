@@ -593,9 +593,9 @@ class MiroClient:
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
     def get_frame_items(self, frame_id: str, cursor: Optional[str] = None, limit: int = 50) -> Dict:
-        """Get items inside a specific frame."""
-        url = f"{self.base}/boards/{self.board_id}/frames/{frame_id}/items"
-        params: Dict[str, Any] = {"limit": limit}
+        """Get items inside a specific frame using parent_item_id query param."""
+        url = f"{self.base}/boards/{self.board_id}/items"
+        params: Dict[str, Any] = {"limit": limit, "parent_item_id": frame_id}
         if cursor:
             params["cursor"] = cursor
         resp = requests.get(
@@ -605,17 +605,21 @@ class MiroClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
     def attach_to_frame(self, frame_id: str, item_ids: List[str]) -> None:
-        """Attach items to a frame (max 20 items per call)."""
-        url = f"{self.base}/boards/{self.board_id}/frames/{frame_id}/items"
-        for chunk in chunked(item_ids, 20):
-            payload = [{"id": iid} for iid in chunk]
-            resp = requests.post(
-                url, headers=self._headers(),
-                data=json.dumps(payload), timeout=self.timeout,
-            )
-            self._raise_for_status(resp)
+        """Attach items to a frame by setting parent on each item."""
+        for item_id in item_ids:
+            self._attach_single_item(frame_id, item_id)
+
+    @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
+    def _attach_single_item(self, frame_id: str, item_id: str) -> None:
+        """Set parent frame for a single item via PATCH."""
+        url = f"{self.base}/boards/{self.board_id}/items/{item_id}"
+        payload = {"parent": {"id": frame_id}}
+        resp = requests.patch(
+            url, headers=self._headers(),
+            data=json.dumps(payload), timeout=self.timeout,
+        )
+        self._raise_for_status(resp)
 
     def find_rightmost_frame(self) -> Tuple[int, int]:
         """Find the rightmost frame edge on the board.

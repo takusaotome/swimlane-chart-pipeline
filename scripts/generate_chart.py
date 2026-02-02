@@ -76,8 +76,10 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
     frame_id = str(frame_resp.get("id", ""))
     print(f"Frame created: {frame_id}")
 
-    # Adjust layout origin to frame center
-    adjusted_cfg = replace(cfg, origin_x=frame_x, origin_y=frame_y + 50)
+    # Adjust layout origin for frame-relative coordinates (parent_top_left)
+    # Items inside a frame use coordinates relative to the frame's top-left corner.
+    # Set origin to the center of the frame dimensions so child items are centered.
+    adjusted_cfg = replace(cfg, origin_x=chart_w // 2, origin_y=chart_h // 2 + 50)
 
     # Track all created items for miro_items.json
     tracked_items: List[Dict] = []
@@ -95,6 +97,14 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
             status="in_progress",
         )
 
+    # Helper to inject parent into each item payload
+    parent_ref = {"id": frame_id}
+
+    def inject_parent(items: List[Dict]) -> List[Dict]:
+        for item in items:
+            item["parent"] = parent_ref
+        return items
+
     # 1) Build and create background items
     bg_items = build_background_items(adjusted_cfg, plan.lanes, plan.columns)
     txt_items = build_text_items(
@@ -104,8 +114,7 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
 
     for batch in chunked(non_flow_items, 20):
         batch_num += 1
-        created = api.bulk_create(batch)
-        batch_ids = []
+        created = api.bulk_create(inject_parent(batch))
         for item in created:
             item_id = str(item.get("id", ""))
             tracked_items.append({
@@ -114,10 +123,6 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
                 "type": item.get("type", "shape"),
                 "batch": batch_num,
             })
-            if item_id:
-                batch_ids.append(item_id)
-        if batch_ids:
-            api.attach_to_frame(frame_id, batch_ids)
         flush()
     print(f"Created {len(non_flow_items)} background/text items.")
 
@@ -130,8 +135,7 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
 
     for batch in chunked(node_items, 20):
         batch_num += 1
-        created = api.bulk_create(batch)
-        batch_ids = []
+        created = api.bulk_create(inject_parent(batch))
         for i, item in enumerate(created):
             item_id = str(item.get("id", ""))
             idx = offset + i
@@ -143,9 +147,6 @@ def generate_chart(chart_plan_path: str, run_id: str) -> str:
                     "type": item.get("type", "shape"),
                     "batch": batch_num,
                 })
-                batch_ids.append(item_id)
-        if batch_ids:
-            api.attach_to_frame(frame_id, batch_ids)
         offset += len(batch)
         flush()
     print(f"Created {len(node_items)} flow nodes. Mapped {len(key_to_id)} IDs.")

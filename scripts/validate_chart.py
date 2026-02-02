@@ -132,7 +132,7 @@ def check_label_truncation(items: List[Dict]) -> List[Dict[str, Any]]:
             continue
 
         # Estimate text width for the longest line
-        font_size = item.get("style", {}).get("fontSize", 14)
+        font_size = int(item.get("style", {}).get("fontSize", 14))
         lines = content.replace("<br>", "\n").split("\n")
         for line in lines:
             text_width = estimate_text_width(line.strip(), font_size)
