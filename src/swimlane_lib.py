@@ -517,16 +517,20 @@ class MiroClient:
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
     def delete_item(self, item_id: str) -> None:
-        """Delete a single item by ID."""
+        """Delete a single item by ID. 404 is treated as already deleted."""
         url = f"{self.base}/boards/{self.board_id}/items/{item_id}"
         resp = requests.delete(url, headers=self._headers(), timeout=self.timeout)
+        if resp.status_code == 404:
+            return  # Already deleted — not an error
         self._raise_for_status(resp)
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
     def delete_connector(self, connector_id: str) -> None:
-        """Delete a connector by ID."""
+        """Delete a connector by ID. 404 is treated as already deleted."""
         url = f"{self.base}/boards/{self.board_id}/connectors/{connector_id}"
         resp = requests.delete(url, headers=self._headers(), timeout=self.timeout)
+        if resp.status_code == 404:
+            return  # Already deleted — not an error
         self._raise_for_status(resp)
 
     @retry(max_attempts=3, backoff_schedule=[1.0, 2.0, 4.0])
@@ -679,11 +683,22 @@ class MiroClient:
 
         Deletion order: connectors -> shapes/text -> frame.
         Returns counts of deleted items by type.
+        If the frame no longer exists, skips child deletion (already cleaned).
         """
         with open(miro_items_path, "r", encoding="utf-8") as f:
             tracked = json.load(f)
 
-        counts: Dict[str, int] = {"connectors": 0, "items": 0, "frame": 0}
+        counts: Dict[str, int] = {"connectors": 0, "items": 0, "frame": 0, "skipped": 0}
+
+        frame_id = tracked.get("frame_id")
+
+        # Quick check: if the frame is gone, everything inside is gone too
+        if frame_id:
+            try:
+                self.get_item(frame_id)
+            except requests.exceptions.RequestException:
+                print(f"Frame {frame_id} not found — already cleaned up.")
+                return counts
 
         # 1. Delete connectors first
         for conn in tracked.get("connectors", []):
@@ -694,6 +709,7 @@ class MiroClient:
                     counts["connectors"] += 1
                     time.sleep(0.1)
                 except requests.exceptions.RequestException as exc:
+                    counts["skipped"] += 1
                     print(f"WARN: Failed to delete connector {miro_id}: {exc}")
 
         # 2. Delete items (shapes, text)
@@ -705,15 +721,16 @@ class MiroClient:
                     counts["items"] += 1
                     time.sleep(0.1)
                 except requests.exceptions.RequestException as exc:
+                    counts["skipped"] += 1
                     print(f"WARN: Failed to delete item {miro_id}: {exc}")
 
         # 3. Delete frame last
-        frame_id = tracked.get("frame_id")
         if frame_id:
             try:
                 self.delete_item(frame_id)
                 counts["frame"] += 1
             except requests.exceptions.RequestException as exc:
+                counts["skipped"] += 1
                 print(f"WARN: Failed to delete frame {frame_id}: {exc}")
 
         return counts

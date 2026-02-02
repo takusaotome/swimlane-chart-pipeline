@@ -71,7 +71,12 @@ def cleanup(miro_items_path: str, force: bool = False) -> None:
     # Perform deletion
     counts = api.cleanup_by_run(miro_items_path)
 
-    print(f"Deleted: {counts['connectors']} connectors, {counts['items']} items, {counts['frame']} frame(s)")
+    if counts["connectors"] == 0 and counts["items"] == 0 and counts["frame"] == 0:
+        print("Nothing to delete — already clean.")
+    else:
+        print(f"Deleted: {counts['connectors']} connectors, {counts['items']} items, {counts['frame']} frame(s)")
+    if counts.get("skipped", 0) > 0:
+        print(f"Skipped (already gone): {counts['skipped']}")
     print("Cleanup complete.")
 
 
