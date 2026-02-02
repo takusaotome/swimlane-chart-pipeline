@@ -28,7 +28,24 @@ user_invocable: true
 - **nodes**: 各プロセスステップをノードに変換
 - **edges**: ステップ間の接続関係をエッジに変換
 
-### 3. ノード種別の決定
+### 3. レーン順序の最適化（★重要）
+
+`references/layout_heuristics.md` の「レーン順序の最適化」セクションに従い、コネクタの交差を最小化するレーン順序を決定する:
+
+1. エッジマトリクスを作成し、レーン間の接続数をカウントする
+2. decision ノードの分岐先レーンを確認し、decision レーンに隣接させる
+3. フロー後半で使用頻度が低いレーンを端に寄せる
+4. 交差数が最小になる順序を選択する
+
+### 4. カラムの統合検討（★重要）
+
+`references/layout_heuristics.md` の「カラムの統合」セクションに従い、不要なカラム分割を統合する:
+
+1. decision ノードと直前の処理が同一レーンにある場合、同一カラムに dx オフセットで配置
+2. ノード数が少ないカラムの統合を検討
+3. 目標: 7カラム以下
+
+### 5. ノード種別の決定
 
 `references/node_kind_guide.md` に従い各ステップの kind を決定:
 - `start` / `end`: 開始・終了ノード
@@ -36,35 +53,38 @@ user_invocable: true
 - `decision`: 判断ポイント（Yes/No分岐）
 - `chip`: 使用システム・ツールのラベル
 
-### 4. レイアウト計算
+### 6. レイアウト計算
 
 `references/layout_heuristics.md` に従い:
-- 同一セル（同一lane × 同一col）内の複数ノードの dx/dy オフセットを計算
+- 同一セル（同一lane × 同一col）内の複数ノードの dx/dy オフセットを計算（2ノード: ±100, 3ノード: -160/0/+160）
 - レーン数・カラム数に応じた layout パラメータの自動調整
 - chip ノードは親ノードの直下（dy=70）に配置
+- end ノードはフロー終端の自然なレーンに配置（start レーンと異なってよい）
 
-### 5. 色の適用
+### 7. 色の適用
 
 `references/color_palette.md` に従い:
 - kind に応じたデフォルト fill カラーを設定
 - 特別な意味を持つノード（エラーパス等）に強調色を適用
 
-### 6. エッジの設定
+### 8. エッジの設定
 
 - 通常の前進エッジ: shape="elbowed", color=null
 - 判断ポイントの Yes 分岐: color="#2E7D32" (green)
 - 判断ポイントの No 分岐: color="#C62828" (red)
 - 差戻し・ループエッジ: dashed=true, shape="curved"
 
-### 7. バリデーション
+### 9. バリデーション
 
 生成前に自動検証:
 - 全 edges の src/dst が nodes に存在するか
 - 全 nodes の lane が lanes に存在するか
 - 全 nodes の col が columns の範囲内か
 - 重複 key がないか
+- decision ノードの分岐先レーンが decision レーンの ±2 レーン以内にあるか（★レーン順序チェック）
+- カラム数が 7 以下か（★カラム数チェック）
 
-### 8. JSON 出力
+### 10. JSON 出力
 
 `assets/chart_plan_schema.json` に準拠した chart_plan.json を生成し、
 `output/{run_id}/chart_plan.json` に書き込む。

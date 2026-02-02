@@ -30,9 +30,14 @@
 ## Frame Operations
 
 - Frame creation: POST /v2/boards/{board_id}/frames
-- Frame items listing: GET /v2/boards/{board_id}/frames/{frame_id}/items
-- Items in frames are positioned relative to the board, not the frame
+- Frame items listing: `GET /v2/boards/{board_id}/items?parent_item_id={frame_id}`
+  - **注意**: `/v2/boards/{board_id}/frames/{frame_id}/items` は存在しない（404）
+- Items in frames use **frame-relative coordinates** (relativeTo: parent_top_left)
+  - 座標原点はフレームの左上角
+  - アイテム作成時に `"parent": {"id": frame_id}` を payload に含める
 - Frame acts as a container/grouping mechanism
+- **推奨**: bulk_create の payload に `"parent"` を含めて作成時点でフレーム内配置する
+  - POST後にPATCHで parent を設定する方法もあるが、座標が再解釈されるため非推奨
 
 ## Connector Constraints
 
